@@ -28,20 +28,6 @@ type RunPhase = 'idle' | 'proposed' | 'vetoed' | 'blocked'
 const copy = appCopy
 const selectedAgent = agents[0]
 const initialScenario = scenarios[0]
-const temporaryEvidenceCopy = {
-  actions: {
-    recordOnMantle: 'Record on Mantle',
-    recordingOnMantle: 'Recording...',
-    recordedOnMantle: 'Recorded',
-    localSimulationRecorded: 'Local Simulation Recorded',
-  },
-  fields: {
-    recordError: 'Record Error',
-  },
-  modes: {
-    onchain: 'On-chain',
-  },
-}
 
 export function ArenaDashboard() {
   const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenario.id)
@@ -426,7 +412,7 @@ function getEvidenceFacts(result: BenchmarkResult, logResult: OnchainLogResult |
   ]
 
   if (logResult?.mode === 'local-simulation' && logResult.error) {
-    facts.push({ label: temporaryEvidenceCopy.fields.recordError, value: logResult.error })
+    facts.push({ label: copy.evidence.fields.recordError, value: logResult.error })
   }
 
   return facts
@@ -434,24 +420,24 @@ function getEvidenceFacts(result: BenchmarkResult, logResult: OnchainLogResult |
 
 function getEvidenceModeLabel(logResult: OnchainLogResult | undefined) {
   return logResult?.mode === 'onchain'
-    ? temporaryEvidenceCopy.modes.onchain
+    ? copy.evidence.modes.onchain
     : copy.evidence.modes.localSimulationMode
 }
 
 function getRecordButtonLabel(logResult: OnchainLogResult | undefined, isLogging: boolean) {
   if (isLogging) {
-    return temporaryEvidenceCopy.actions.recordingOnMantle
+    return copy.evidence.actions.recordingOnMantle
   }
 
   if (logResult?.mode === 'onchain') {
-    return temporaryEvidenceCopy.actions.recordedOnMantle
+    return copy.evidence.actions.recordedOnMantle
   }
 
   if (logResult?.mode === 'local-simulation') {
-    return temporaryEvidenceCopy.actions.localSimulationRecorded
+    return copy.evidence.actions.localSimulationRecorded
   }
 
-  return temporaryEvidenceCopy.actions.recordOnMantle
+  return copy.evidence.actions.recordOnMantle
 }
 
 function getHumanVsAiRows() {
