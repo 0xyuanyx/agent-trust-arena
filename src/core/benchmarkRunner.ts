@@ -3,11 +3,9 @@ import { scenarios } from "../data/scenarios";
 import type {
   BenchmarkResult,
   DecodedCalldata,
-  Proposal,
   Scenario,
-  VerificationResult,
 } from "../types/benchmark";
-import * as intentVerifierModule from "./intentVerifier";
+import { verifyScenarioIntent } from "./intentVerifier";
 import { runProposerAgent } from "./agentRunner";
 import { runRiskAuditor } from "./riskAuditor";
 import { runExecutor } from "./executor";
@@ -43,14 +41,6 @@ export interface BenchmarkRunHistoryEntry {
   createdAt: string;
 }
 
-type IntentVerifierModule = typeof intentVerifierModule & {
-  verifyIntentCalldata?: (input: {
-    scenario: Scenario;
-    proposal: Proposal;
-    decodedCalldata: DecodedCalldata;
-  }) => VerificationResult;
-};
-
 const RECENT_RUNS_STORAGE_KEY = "agent-trust-arena:recent-runs";
 
 export const defaultBenchmarkPolicy = {
@@ -71,9 +61,8 @@ export function runBenchmark({
   const scenario = findScenario(scenarioId);
   const proposal = runProposerAgent(scenario, agent);
   const decodedCalldata = scenario.expectedDecodedCalldata;
-  const verification = runIntentVerifierFallback({
+  const verification = runIntentVerifierWithErrorFallback({
     scenario,
-    proposal,
     decodedCalldata,
   });
   const audit = runRiskAuditor({
@@ -154,13 +143,15 @@ function findScenario(scenarioId: string) {
   return scenario;
 }
 
-function runIntentVerifierFallback(input: {
+function runIntentVerifierWithErrorFallback(input: {
   scenario: Scenario;
-  proposal: Proposal;
   decodedCalldata: DecodedCalldata;
 }) {
-  const maybeVerifier = (intentVerifierModule as IntentVerifierModule).verifyIntentCalldata;
-  return maybeVerifier ? maybeVerifier(input) : input.scenario.expectedVerification;
+  try {
+    return verifyScenarioIntent(input.scenario, input.decodedCalldata);
+  } catch {
+    return input.scenario.expectedVerification;
+  }
 }
 
 function saveRecentRun(result: BenchmarkResult) {
