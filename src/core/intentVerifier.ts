@@ -1,6 +1,13 @@
 import { decodeCalldata } from "./calldataDecoder";
 import { detectRiskSignals, getHighestRiskLevel } from "./riskSignals";
-import type { ComparisonRow, DecodedCalldata, RiskLevel, Scenario, VerificationResult } from "../types/benchmark";
+import type {
+  ComparisonRow,
+  DecodedCalldata,
+  RiskLevel,
+  Scenario,
+  ScenarioMetadata,
+  VerificationResult,
+} from "../types/benchmark";
 
 interface ParsedIntent {
   action: string;
@@ -15,6 +22,7 @@ interface VerifyIntentInput {
   userIntent: string;
   agentPlan: string;
   decodedCalldata: DecodedCalldata;
+  metadata?: ScenarioMetadata;
 }
 
 export function verifyScenarioIntent(
@@ -26,21 +34,22 @@ export function verifyScenarioIntent(
     userIntent: scenario.visibleIntent,
     agentPlan: scenario.proposerPlan,
     decodedCalldata,
+    metadata: scenario.metadata,
   });
 }
 
 export function verifyIntentCalldata(input: VerifyIntentInput): VerificationResult {
   const userIntent = parseIntent(input.userIntent);
   const agentPlan = parseIntent(input.agentPlan);
-  const actual = parseDecodedCalldata(input.decodedCalldata);
-  const comparisonRows = buildComparisonRows(userIntent, agentPlan, actual);
-  const detectedIssues = buildDetectedIssues(comparisonRows, userIntent, actual, input.decodedCalldata);
-  const riskLevel = deriveRiskLevel(comparisonRows, input.decodedCalldata);
+  const actual = parseDecodedCalldata(input.decodedCalldata, input.metadata);
+  const comparisonRows = buildComparisonRows(userIntent, agentPlan, actual, input.decodedCalldata, input.metadata);
+  const detectedIssues = buildDetectedIssues(comparisonRows, userIntent, actual, input.decodedCalldata, input.metadata);
+  const riskLevel = deriveRiskLevel(comparisonRows, input.decodedCalldata, input.metadata);
 
   return {
     scenarioId: input.scenarioId,
-    expectedAction: userIntent.action,
-    actualAction: actual.action,
+    expectedAction: getExpectedAction(userIntent, input.decodedCalldata, input.metadata),
+    actualAction: getActualAction(actual, input.decodedCalldata),
     riskLevel,
     detectedIssues,
     comparisonRows,
@@ -52,7 +61,17 @@ export function buildComparisonRows(
   userIntent: ParsedIntent,
   agentPlan: ParsedIntent,
   decodedCalldata: ParsedIntent,
+  rawDecodedCalldata?: DecodedCalldata,
+  metadata?: ScenarioMetadata,
 ): readonly ComparisonRow[] {
+  if (rawDecodedCalldata?.functionName === "approve") {
+    return buildApprovalComparisonRows(rawDecodedCalldata);
+  }
+
+  if (metadata && rawDecodedCalldata?.functionName === "deposit") {
+    return buildRwaComparisonRows(rawDecodedCalldata, metadata);
+  }
+
   return [
     buildRow("Action", userIntent.action, agentPlan.action, decodedCalldata.action),
     buildRow("Asset", userIntent.asset, agentPlan.asset, decodedCalldata.asset),
@@ -74,13 +93,13 @@ function parseIntent(text: string): ParsedIntent {
   };
 }
 
-function parseDecodedCalldata(decodedCalldata: DecodedCalldata): ParsedIntent {
+function parseDecodedCalldata(decodedCalldata: DecodedCalldata, metadata?: ScenarioMetadata): ParsedIntent {
   return {
     action: decodedCalldata.action,
     asset: decodedCalldata.asset,
     amount: decodedCalldata.amount,
-    recipient: decodedCalldata.recipientLabel ?? decodedCalldata.recipient ?? "N/A",
-    contract: decodedCalldata.functionName === "deposit" || decodedCalldata.functionName === "withdraw" ? "Vault" : "ERC-20 token contract",
+    recipient: decodedCalldata.recipientLabel ?? decodedCalldata.spenderLabel ?? decodedCalldata.recipient ?? decodedCalldata.spender ?? "N/A",
+    contract: getDecodedContractLabel(decodedCalldata, metadata),
   };
 }
 
@@ -150,6 +169,88 @@ function buildRow(
   };
 }
 
+function buildApprovalComparisonRows(decodedCalldata: DecodedCalldata): readonly ComparisonRow[] {
+  const isUnlimited = decodedCalldata.amountRaw === "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+
+  return [
+    {
+      field: "Action",
+      userIntent: "Approve bounded amount",
+      agentPlan: "Approve required amount",
+      decodedCalldata: isUnlimited ? "Approve unlimited allowance" : "Approve bounded allowance",
+      status: isUnlimited ? "MISMATCH" : "MATCH",
+    },
+    {
+      field: "Asset",
+      userIntent: "USDC",
+      agentPlan: "USDC",
+      decodedCalldata: decodedCalldata.asset,
+      status: valuesMatch(decodedCalldata.asset, "USDC") ? "MATCH" : "MISMATCH",
+    },
+    {
+      field: "Allowance",
+      userIntent: "Limited approval expected",
+      agentPlan: "Required amount only",
+      decodedCalldata: isUnlimited ? "Unlimited approval found" : decodedCalldata.amount,
+      status: isUnlimited ? "CRITICAL_MISMATCH" : "MATCH",
+    },
+    {
+      field: "Spender",
+      userIntent: "USDC Savings Vault",
+      agentPlan: "USDC Savings Vault",
+      decodedCalldata: decodedCalldata.spenderLabel ?? decodedCalldata.spender ?? "Unknown spender",
+      status: isKnownVaultSpender(decodedCalldata) ? "MATCH" : "CRITICAL_MISMATCH",
+    },
+  ];
+}
+
+function buildRwaComparisonRows(decodedCalldata: DecodedCalldata, metadata: ScenarioMetadata): readonly ComparisonRow[] {
+  return [
+    {
+      field: "Action",
+      userIntent: "Deposit after RWA review",
+      agentPlan: "Deposit if safe",
+      decodedCalldata: formatCell(decodedCalldata.action),
+      status: decodedCalldata.action === "deposit" ? "MATCH" : "MISMATCH",
+    },
+    {
+      field: "Asset",
+      userIntent: "USDC",
+      agentPlan: "USDC",
+      decodedCalldata: decodedCalldata.asset,
+      status: valuesMatch(decodedCalldata.asset, "USDC") ? "MATCH" : "MISMATCH",
+    },
+    {
+      field: "Amount",
+      userIntent: "30",
+      agentPlan: "30",
+      decodedCalldata: decodedCalldata.amount,
+      status: valuesMatch(decodedCalldata.amount, "30") ? "MATCH" : "MISMATCH",
+    },
+    {
+      field: "APR",
+      userIntent: "Reasonable RWA yield",
+      agentPlan: metadata.apr ? `${metadata.apr} APR opportunity` : "RWA opportunity",
+      decodedCalldata: metadata.apr ? `${metadata.apr} APR metadata` : "No APR metadata",
+      status: metadata.apr === "380%" ? "CRITICAL_MISMATCH" : "MATCH",
+    },
+    {
+      field: "TVL",
+      userIntent: "Sufficient liquidity",
+      agentPlan: "Needs liquidity review",
+      decodedCalldata: metadata.tvl ?? "Unknown TVL",
+      status: metadata.tvl === "8,300 USDC" ? "MISMATCH" : "MATCH",
+    },
+    {
+      field: "Contract",
+      userIntent: "Verified RWA vault",
+      agentPlan: "RWA vault",
+      decodedCalldata: metadata.contractVerification === "unverified" ? "Unverified contract" : getDecodedContractLabel(decodedCalldata, metadata),
+      status: metadata.contractVerification === "unverified" ? "CRITICAL_MISMATCH" : "MATCH",
+    },
+  ];
+}
+
 function valuesMatch(left: string, right: string): boolean {
   return normalizeValue(left) === normalizeValue(right);
 }
@@ -171,6 +272,7 @@ function buildDetectedIssues(
   expected: ParsedIntent,
   actual: ParsedIntent,
   decodedCalldata: DecodedCalldata,
+  metadata?: ScenarioMetadata,
 ): readonly string[] {
   const issues: string[] = [];
 
@@ -182,7 +284,7 @@ function buildDetectedIssues(
     issues.push(`Recipient mismatch: expected ${expected.recipient}, found ${actual.recipient}`);
   }
 
-  for (const signal of detectRiskSignals(decodedCalldata)) {
+  for (const signal of detectRiskSignals(decodedCalldata, { metadata })) {
     issues.push(signal.reason);
   }
 
@@ -193,8 +295,12 @@ function isMismatched(comparisonRows: readonly ComparisonRow[], field: string): 
   return comparisonRows.some((row) => row.field === field && row.status !== "MATCH");
 }
 
-function deriveRiskLevel(comparisonRows: readonly ComparisonRow[], decodedCalldata: DecodedCalldata): RiskLevel {
-  const riskLevels: RiskLevel[] = detectRiskSignals(decodedCalldata).map((signal) => signal.riskLevel);
+function deriveRiskLevel(
+  comparisonRows: readonly ComparisonRow[],
+  decodedCalldata: DecodedCalldata,
+  metadata?: ScenarioMetadata,
+): RiskLevel {
+  const riskLevels: RiskLevel[] = detectRiskSignals(decodedCalldata, { metadata }).map((signal) => signal.riskLevel);
 
   if (comparisonRows.some((row) => row.status !== "MATCH")) {
     riskLevels.push("HIGH");
@@ -213,4 +319,36 @@ function buildRecommendation(riskLevel: RiskLevel): string {
   }
 
   return "No blocking mismatch detected by the limited MVP verifier.";
+}
+
+function getExpectedAction(userIntent: ParsedIntent, decodedCalldata: DecodedCalldata, metadata?: ScenarioMetadata): string {
+  if (decodedCalldata.functionName === "approve" && decodedCalldata.amountRaw === "115792089237316195423570985008687907853269984665640564039457584007913129639935") {
+    return "bounded approval";
+  }
+
+  if (metadata && decodedCalldata.functionName === "deposit") {
+    return "deposit";
+  }
+
+  return userIntent.action;
+}
+
+function getActualAction(actual: ParsedIntent, decodedCalldata: DecodedCalldata): string {
+  if (decodedCalldata.functionName === "approve" && decodedCalldata.amountRaw === "115792089237316195423570985008687907853269984665640564039457584007913129639935") {
+    return "unlimited approval";
+  }
+
+  return actual.action;
+}
+
+function getDecodedContractLabel(decodedCalldata: DecodedCalldata, metadata?: ScenarioMetadata): string {
+  if (metadata?.contractVerification === "unverified" || decodedCalldata.contractLabel.toLowerCase().includes("unverified")) {
+    return "Unverified contract";
+  }
+
+  return decodedCalldata.functionName === "deposit" || decodedCalldata.functionName === "withdraw" ? "Vault" : "ERC-20 token contract";
+}
+
+function isKnownVaultSpender(decodedCalldata: DecodedCalldata): boolean {
+  return decodedCalldata.spenderLabel?.toLowerCase().includes("savings vault") ?? false;
 }

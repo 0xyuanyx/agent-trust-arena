@@ -60,6 +60,8 @@ export const SUPPORTED_SELECTORS: Record<HexString, FunctionMetadata> = {
 
 const DEFAULT_TOKEN_DECIMALS = 18;
 const USDC_DECIMALS = 6;
+const MAX_UINT256 =
+  "115792089237316195423570985008687907853269984665640564039457584007913129639935";
 
 export function decodeCalldata(input: HiddenCalldata | DecodeInput): DecodedCalldata {
   const normalizedInput = normalizeDecodeInput(input);
@@ -76,12 +78,16 @@ export function decodeCalldata(input: HiddenCalldata | DecodeInput): DecodedCall
 
   if (metadata.functionName === "transfer") {
     const [to, value] = decodeAbiParameters([{ type: "address" }, { type: "uint256" }], encodedArgs);
-    return buildDecodedCalldata(normalizedInput, metadata, asset, decimals, value, normalizeAddress(to));
+    return buildDecodedCalldata(normalizedInput, metadata, asset, decimals, value, {
+      recipient: normalizeAddress(to),
+    });
   }
 
   if (metadata.functionName === "approve") {
     const [spender, value] = decodeAbiParameters([{ type: "address" }, { type: "uint256" }], encodedArgs);
-    return buildDecodedCalldata(normalizedInput, metadata, asset, decimals, value, normalizeAddress(spender));
+    return buildDecodedCalldata(normalizedInput, metadata, asset, decimals, value, {
+      spender: normalizeAddress(spender),
+    });
   }
 
   if (metadata.functionName === "transferFrom") {
@@ -89,7 +95,9 @@ export function decodeCalldata(input: HiddenCalldata | DecodeInput): DecodedCall
       [{ type: "address" }, { type: "address" }, { type: "uint256" }],
       encodedArgs,
     );
-    return buildDecodedCalldata(normalizedInput, metadata, asset, decimals, value, normalizeAddress(to));
+    return buildDecodedCalldata(normalizedInput, metadata, asset, decimals, value, {
+      recipient: normalizeAddress(to),
+    });
   }
 
   const [value] = decodeAbiParameters([{ type: "uint256" }], encodedArgs);
@@ -112,8 +120,13 @@ function normalizeDecodeInput(input: HiddenCalldata | DecodeInput): DecodeInput 
   };
 
   if ("decodedArgs" in input) {
+    const amountLabel = input.decodedArgs.find((arg) => arg.type === "uint256" && arg.label)?.label;
+    const asset = amountLabel ? inferAssetFromLabel(amountLabel) : undefined;
+
     return {
       ...base,
+      asset,
+      decimals: asset === "USDC" ? USDC_DECIMALS : undefined,
       recipientLabels: Object.fromEntries(
         input.decodedArgs
           .filter((arg) => arg.type === "address" && arg.label)
@@ -131,9 +144,10 @@ function buildDecodedCalldata(
   asset: string,
   decimals: number,
   value: bigint,
-  recipient?: HexString,
+  parties: { recipient?: HexString; spender?: HexString } = {},
 ): DecodedCalldata {
   const amountRaw = value.toString();
+  const amount = metadata.functionName === "approve" && amountRaw === MAX_UINT256 ? "Unlimited" : formatUnits(value, decimals);
 
   return {
     rawCalldata: input.calldata,
@@ -144,11 +158,13 @@ function buildDecodedCalldata(
     functionSignature: metadata.functionSignature,
     action: metadata.action,
     asset,
-    amount: formatUnits(value, decimals),
+    amount,
     amountRaw,
     decimals,
-    recipient,
-    recipientLabel: recipient ? input.recipientLabels?.[recipient] : undefined,
+    recipient: parties.recipient,
+    recipientLabel: parties.recipient ? input.recipientLabels?.[parties.recipient] : undefined,
+    spender: parties.spender,
+    spenderLabel: parties.spender ? input.recipientLabels?.[parties.spender] : undefined,
   };
 }
 
@@ -184,6 +200,11 @@ function inferAsset(input: DecodeInput): string {
   }
 
   return "Token";
+}
+
+function inferAssetFromLabel(label: string): string | undefined {
+  const assetMatch = label.match(/\b[A-Z]{2,10}\b/u);
+  return assetMatch?.[0];
 }
 
 function inferDecimals(input: DecodeInput): number {
