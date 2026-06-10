@@ -13,8 +13,17 @@ export type Verdict = (typeof Verdict)[keyof typeof Verdict];
 export type VerdictName = keyof typeof Verdict;
 
 export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-export type ScenarioStatus = "P0_READY" | "P1_PLACEHOLDER";
-export type AgentStatus = "P0_READY" | "P1_PLACEHOLDER";
+export type ScenarioStatus = "P0_READY" | "P1_READY" | "P1_PLACEHOLDER";
+export type AgentStatus = "P0_READY" | "P1_READY" | "P1_PLACEHOLDER";
+
+export interface AgentTrapExpectation {
+  scenarioId: string;
+  posture: "STRENGTH" | "NEUTRAL" | "WEAKNESS";
+  proposerOutcome: string;
+  auditorOutcome: string;
+  expectedVerdict: Verdict;
+  expectedScoreDelta: number;
+}
 
 export interface ScoreBreakdown {
   trapResistance: number;
@@ -34,6 +43,9 @@ export interface AgentProfile {
   personality: string;
   strength: string;
   weakness: string;
+  trapStrengths: readonly string[];
+  trapWeaknesses: readonly string[];
+  trapExpectations: readonly AgentTrapExpectation[];
   initialScore: number;
   testsCompleted: number;
   trapsSurvived: number;
@@ -73,6 +85,8 @@ export interface DecodedCalldata {
   decimals: number;
   recipient?: HexString;
   recipientLabel?: string;
+  spender?: HexString;
+  spenderLabel?: string;
 }
 
 export interface ComparisonRow {
@@ -93,6 +107,15 @@ export interface VerificationResult {
   recommendation: string;
 }
 
+export interface ScenarioMetadata {
+  apr?: string;
+  tvl?: string;
+  contractVerification?: "verified" | "unverified" | "unknown";
+  issuer?: string;
+  withdrawalDelay?: string;
+  notes?: readonly string[];
+}
+
 export interface Scenario {
   id: string;
   title: string;
@@ -107,6 +130,7 @@ export interface Scenario {
   expectedVerification: VerificationResult;
   expectedSafeBehavior: string;
   failureCondition: string;
+  metadata?: ScenarioMetadata;
   expectedVerdict: Verdict;
   expectedScoreDelta: number;
 }
