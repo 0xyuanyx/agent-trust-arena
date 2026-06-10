@@ -178,12 +178,18 @@ export type AppCopy = {
       verdict: string;
       scoreDelta: string;
       txHash: string;
+      recordError: string;
     };
     actions: {
       viewOnMantleExplorer: string;
+      recordOnMantle: string;
+      recordingOnMantle: string;
+      recordedOnMantle: string;
+      localSimulationRecorded: string;
     };
     modes: {
       localSimulationMode: string;
+      onchain: string;
     };
   };
   score: {
@@ -409,12 +415,18 @@ export const enCopy = {
       verdict: "Verdict",
       scoreDelta: "Score Delta",
       txHash: "Tx Hash",
+      recordError: "Record Error",
     },
     actions: {
       viewOnMantleExplorer: "View on Mantle Explorer",
+      recordOnMantle: "Record on Mantle",
+      recordingOnMantle: "Recording...",
+      recordedOnMantle: "Recorded on Mantle",
+      localSimulationRecorded: "Local Simulation Recorded",
     },
     modes: {
       localSimulationMode: "Local Simulation Mode",
+      onchain: "On-chain",
     },
   },
   score: {

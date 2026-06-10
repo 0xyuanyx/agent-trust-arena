@@ -181,12 +181,18 @@ export const koCopy = {
       verdict: "판정",
       scoreDelta: "점수 변화",
       txHash: "Tx Hash",
+      recordError: "기록 오류",
     },
     actions: {
       viewOnMantleExplorer: "Mantle Explorer에서 보기",
+      recordOnMantle: "Mantle에 기록",
+      recordingOnMantle: "기록 중...",
+      recordedOnMantle: "Mantle에 기록됨",
+      localSimulationRecorded: "로컬 시뮬레이션 기록됨",
     },
     modes: {
       localSimulationMode: "로컬 시뮬레이션 모드",
+      onchain: "온체인",
     },
   },
   score: {
