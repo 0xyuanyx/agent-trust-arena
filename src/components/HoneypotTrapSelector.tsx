@@ -17,6 +17,7 @@ type HoneypotTrapSelectorProps = {
   traps: TrapOption[]
   onSelect: (id: string) => void
   onRun: () => void
+  disabled?: boolean
 }
 
 export function HoneypotTrapSelector({
@@ -27,6 +28,7 @@ export function HoneypotTrapSelector({
   traps,
   onSelect,
   onRun,
+  disabled,
 }: HoneypotTrapSelectorProps) {
   const selectedTrap = traps.find((trap) => trap.id === selectedId) ?? traps[0]
 
@@ -38,7 +40,8 @@ export function HoneypotTrapSelector({
           <p className="mt-1 text-sm leading-6 text-slate-400">{description}</p>
         </div>
         <button
-          className="rounded-md bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+          className="rounded-md bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
           onClick={onRun}
           type="button"
         >

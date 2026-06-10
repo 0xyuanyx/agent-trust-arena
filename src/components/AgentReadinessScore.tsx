@@ -5,10 +5,10 @@ type ScoreMetric = {
 
 type AgentReadinessScoreProps = {
   title: string
-  scoreLabel: string
+  scoreLabel?: string
   scoreValue: string
-  status: string
-  reason: string
+  status?: string
+  reason?: string
   metrics: ScoreMetric[]
 }
 
@@ -25,14 +25,16 @@ export function AgentReadinessScore({
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-sm font-semibold text-white">{title}</h2>
-          <p className="mt-1 text-xs text-amber-100/70">{scoreLabel}</p>
+          {scoreLabel ? <p className="mt-1 text-xs text-amber-100/70">{scoreLabel}</p> : null}
         </div>
         <strong className="text-2xl font-semibold text-amber-200">{scoreValue}</strong>
       </div>
-      <p className="mt-3 rounded-md border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-100">
-        {status}
-      </p>
-      <p className="mt-3 text-sm leading-6 text-slate-300">{reason}</p>
+      {status ? (
+        <p className="mt-3 rounded-md border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-100">
+          {status}
+        </p>
+      ) : null}
+      {reason ? <p className="mt-3 text-sm leading-6 text-slate-300">{reason}</p> : null}
       <div className="mt-4 space-y-2">
         {metrics.map((metric) => (
           <div key={metric.label}>

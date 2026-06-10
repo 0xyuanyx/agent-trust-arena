@@ -9,7 +9,7 @@ type ComparisonRow = {
 
 type IntentCalldataVerifierProps = {
   title: string
-  subtitle: string
+  subtitle?: string
   columns: {
     field: string
     intent: string
@@ -18,6 +18,7 @@ type IntentCalldataVerifierProps = {
     status: string
   }
   rows: ComparisonRow[]
+  emptyState: string
 }
 
 export function IntentCalldataVerifier({
@@ -25,11 +26,12 @@ export function IntentCalldataVerifier({
   subtitle,
   columns,
   rows,
+  emptyState,
 }: IntentCalldataVerifierProps) {
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
       <h2 className="text-lg font-semibold text-white">{title}</h2>
-      <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
+      {subtitle ? <p className="mt-1 text-sm text-slate-400">{subtitle}</p> : null}
       <div className="mt-5 overflow-hidden rounded-lg border border-white/10">
         <table className="w-full table-fixed border-collapse text-left text-sm">
           <thead className="bg-white/[0.06] text-xs uppercase tracking-wide text-slate-500">
@@ -42,19 +44,27 @@ export function IntentCalldataVerifier({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {rows.map((row) => (
-              <tr key={row.field}>
-                <td className="px-3 py-3 font-medium text-slate-200">{row.field}</td>
-                <td className="px-3 py-3 text-slate-400">{row.intent}</td>
-                <td className="px-3 py-3 text-slate-400">{row.plan}</td>
-                <td className="break-words px-3 py-3 font-mono text-xs text-slate-300">
-                  {row.calldata}
-                </td>
-                <td className="px-3 py-3">
-                  <span className={statusClassName(row.tone)}>{row.status}</span>
+            {rows.length > 0 ? (
+              rows.map((row) => (
+                <tr key={row.field}>
+                  <td className="px-3 py-3 font-medium text-slate-200">{row.field}</td>
+                  <td className="px-3 py-3 text-slate-400">{row.intent}</td>
+                  <td className="px-3 py-3 text-slate-400">{row.plan}</td>
+                  <td className="break-words px-3 py-3 font-mono text-xs text-slate-300">
+                    {row.calldata}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={statusClassName(row.tone)}>{row.status}</span>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="px-3 py-5 text-sm text-slate-400" colSpan={5}>
+                  {emptyState}
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
