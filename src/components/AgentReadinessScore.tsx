@@ -1,0 +1,54 @@
+type ScoreMetric = {
+  label: string
+  value: number
+}
+
+type AgentReadinessScoreProps = {
+  title: string
+  scoreLabel: string
+  scoreValue: string
+  status: string
+  reason: string
+  metrics: ScoreMetric[]
+}
+
+export function AgentReadinessScore({
+  title,
+  scoreLabel,
+  scoreValue,
+  status,
+  reason,
+  metrics,
+}: AgentReadinessScoreProps) {
+  return (
+    <section className="rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-white">{title}</h2>
+          <p className="mt-1 text-xs text-amber-100/70">{scoreLabel}</p>
+        </div>
+        <strong className="text-2xl font-semibold text-amber-200">{scoreValue}</strong>
+      </div>
+      <p className="mt-3 rounded-md border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-100">
+        {status}
+      </p>
+      <p className="mt-3 text-sm leading-6 text-slate-300">{reason}</p>
+      <div className="mt-4 space-y-2">
+        {metrics.map((metric) => (
+          <div key={metric.label}>
+            <div className="flex justify-between text-xs text-slate-400">
+              <span>{metric.label}</span>
+              <span>{metric.value}</span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-amber-300"
+                style={{ width: `${metric.value}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
