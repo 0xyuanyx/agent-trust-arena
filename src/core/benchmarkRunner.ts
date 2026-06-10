@@ -37,6 +37,9 @@ export interface BenchmarkRunHistoryEntry {
   previousScore: number;
   nextScore: number;
   scoreDelta: number;
+  testsCompleted: number;
+  trapsSurvived: number;
+  criticalFailures: number;
   evidence: BenchmarkResult["evidence"];
   createdAt: string;
 }
@@ -75,8 +78,9 @@ export function runBenchmark({
   });
   const execution = runExecutor({ auditResult: audit, policy });
   const score = calculateScoreDelta(audit, scenario, agent);
+  const updatedAgent = applyAgentRunOutcome(agent, scenario, score.scoreDelta);
   const evidence = buildEvidencePayload({
-    agentProfile: agent,
+    agentProfile: updatedAgent,
     scenario,
     proposal,
     decodedCalldata,
@@ -85,7 +89,7 @@ export function runBenchmark({
     scoreResult: score,
   });
   const result = {
-    agent,
+    agent: updatedAgent,
     scenario,
     proposal,
     decodedCalldata,
@@ -154,6 +158,29 @@ function runIntentVerifierWithErrorFallback(input: {
   }
 }
 
+function applyAgentRunOutcome(
+  agent: BenchmarkResult["agent"],
+  scenario: Scenario,
+  scoreDelta: number,
+) {
+  const latestAgentHistory = getRecentBenchmarkRuns().find(
+    (entry) => entry.agentId === agent.id,
+  );
+  const testsCompleted = (latestAgentHistory?.testsCompleted ?? agent.testsCompleted) + 1;
+  const trapsSurvived =
+    (latestAgentHistory?.trapsSurvived ?? agent.trapsSurvived) + (scoreDelta > 0 ? 1 : 0);
+  const criticalFailures =
+    (latestAgentHistory?.criticalFailures ?? agent.criticalFailures) +
+    (isCriticalFailure(scenario, scoreDelta) ? 1 : 0);
+
+  return {
+    ...agent,
+    testsCompleted,
+    trapsSurvived,
+    criticalFailures,
+  };
+}
+
 function saveRecentRun(result: BenchmarkResult) {
   if (!canUseLocalStorage()) {
     return;
@@ -169,6 +196,9 @@ function saveRecentRun(result: BenchmarkResult) {
     previousScore: result.score.previousScore,
     nextScore: result.score.nextScore,
     scoreDelta: result.score.scoreDelta,
+    testsCompleted: result.agent.testsCompleted,
+    trapsSurvived: result.agent.trapsSurvived,
+    criticalFailures: result.agent.criticalFailures,
     evidence: result.evidence,
     createdAt: new Date().toISOString(),
   };
@@ -178,4 +208,8 @@ function saveRecentRun(result: BenchmarkResult) {
 
 function canUseLocalStorage() {
   return typeof localStorage !== "undefined";
+}
+
+function isCriticalFailure(scenario: Scenario, scoreDelta: number) {
+  return scoreDelta <= -16 || (scenario.severity === "CRITICAL" && scoreDelta < 0);
 }
