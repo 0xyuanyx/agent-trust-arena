@@ -17,6 +17,7 @@ import {
   runBenchmark,
   type BenchmarkRunHistoryEntry,
 } from '../core/benchmarkRunner'
+import { logDecisionToMantle, type OnchainLogResult } from '../core/onchainLogger'
 import { appCopy } from '../copy'
 import { agents } from '../data/agents'
 import { scenarios } from '../data/scenarios'
@@ -27,11 +28,27 @@ type RunPhase = 'idle' | 'proposed' | 'vetoed' | 'blocked'
 const copy = appCopy
 const selectedAgent = agents[0]
 const initialScenario = scenarios[0]
+const temporaryEvidenceCopy = {
+  actions: {
+    recordOnMantle: 'Record on Mantle',
+    recordingOnMantle: 'Recording...',
+    recordedOnMantle: 'Recorded',
+    localSimulationRecorded: 'Local Simulation Recorded',
+  },
+  fields: {
+    recordError: 'Record Error',
+  },
+  modes: {
+    onchain: 'On-chain',
+  },
+}
 
 export function ArenaDashboard() {
   const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenario.id)
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResult>()
+  const [onchainLogResult, setOnchainLogResult] = useState<OnchainLogResult>()
+  const [isLoggingDecision, setIsLoggingDecision] = useState(false)
   const [history, setHistory] = useState<BenchmarkRunHistoryEntry[]>(() =>
     getRecentBenchmarkRuns(),
   )
@@ -56,6 +73,7 @@ export function ArenaDashboard() {
     const nextHistory = getRecentBenchmarkRuns()
 
     setBenchmarkResult(result)
+    setOnchainLogResult(undefined)
     setHistory(nextHistory)
     setPhase('proposed')
 
@@ -75,6 +93,22 @@ export function ArenaDashboard() {
     setSelectedScenarioId(scenarioId)
     setBenchmarkResult(undefined)
     setPhase('idle')
+    setOnchainLogResult(undefined)
+  }
+
+  async function handleRecordOnMantle() {
+    if (!benchmarkResult || !hasBlockedResult || isLoggingDecision || onchainLogResult) {
+      return
+    }
+
+    setIsLoggingDecision(true)
+
+    try {
+      const result = await logDecisionToMantle(benchmarkResult.evidence)
+      setOnchainLogResult(result)
+    } finally {
+      setIsLoggingDecision(false)
+    }
   }
 
   return (
@@ -205,8 +239,27 @@ export function ArenaDashboard() {
           <DecisionEvidencePanel
             emptyState={copy.history.emptyState}
             explorerLabel={copy.evidence.actions.viewOnMantleExplorer}
-            facts={hasBlockedResult && benchmarkResult ? getEvidenceFacts(benchmarkResult) : []}
-            modeLabel={hasResult ? copy.evidence.modes.localSimulationMode : undefined}
+            explorerHref={
+              onchainLogResult?.mode === 'onchain' ? onchainLogResult.explorerUrl : undefined
+            }
+            facts={
+              hasBlockedResult && benchmarkResult
+                ? getEvidenceFacts(benchmarkResult, onchainLogResult)
+                : []
+            }
+            modeLabel={hasResult ? getEvidenceModeLabel(onchainLogResult) : undefined}
+            recordAction={
+              hasBlockedResult ? (
+                <button
+                  className="w-full rounded-md bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLoggingDecision || Boolean(onchainLogResult)}
+                  onClick={handleRecordOnMantle}
+                  type="button"
+                >
+                  {getRecordButtonLabel(onchainLogResult, isLoggingDecision)}
+                </button>
+              ) : undefined
+            }
             title={copy.evidence.title}
           />
           <HumanVsAiBaseline
@@ -355,16 +408,50 @@ function getConsoleEvents(result: BenchmarkResult | undefined, phase: RunPhase) 
   return events
 }
 
-function getEvidenceFacts(result: BenchmarkResult) {
-  return [
+function getEvidenceFacts(result: BenchmarkResult, logResult: OnchainLogResult | undefined) {
+  const facts = [
     { label: copy.evidence.fields.network, value: result.agent.network },
     { label: copy.evidence.fields.contract, value: result.decodedCalldata.contractLabel },
     { label: copy.evidence.fields.agentId, value: result.agent.id },
     { label: copy.evidence.fields.scenarioId, value: result.scenario.id },
     { label: copy.evidence.fields.verdict, value: result.execution.status },
     { label: copy.evidence.fields.scoreDelta, value: formatSignedNumber(result.score.scoreDelta) },
-    { label: copy.evidence.fields.txHash, value: copy.evidence.modes.localSimulationMode },
+    {
+      label: copy.evidence.fields.txHash,
+      value:
+        logResult?.mode === 'onchain' && logResult.txHash
+          ? logResult.txHash
+          : copy.evidence.modes.localSimulationMode,
+    },
   ]
+
+  if (logResult?.mode === 'local-simulation' && logResult.error) {
+    facts.push({ label: temporaryEvidenceCopy.fields.recordError, value: logResult.error })
+  }
+
+  return facts
+}
+
+function getEvidenceModeLabel(logResult: OnchainLogResult | undefined) {
+  return logResult?.mode === 'onchain'
+    ? temporaryEvidenceCopy.modes.onchain
+    : copy.evidence.modes.localSimulationMode
+}
+
+function getRecordButtonLabel(logResult: OnchainLogResult | undefined, isLogging: boolean) {
+  if (isLogging) {
+    return temporaryEvidenceCopy.actions.recordingOnMantle
+  }
+
+  if (logResult?.mode === 'onchain') {
+    return temporaryEvidenceCopy.actions.recordedOnMantle
+  }
+
+  if (logResult?.mode === 'local-simulation') {
+    return temporaryEvidenceCopy.actions.localSimulationRecorded
+  }
+
+  return temporaryEvidenceCopy.actions.recordOnMantle
 }
 
 function getHumanVsAiRows() {
