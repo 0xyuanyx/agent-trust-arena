@@ -1,50 +1,98 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AgentExecutionPipeline } from '../components/AgentExecutionPipeline'
 import { AgentProfileCard } from '../components/AgentProfileCard'
 import { AgentReadinessScore } from '../components/AgentReadinessScore'
+import { AgentSelector } from '../components/AgentSelector'
 import { DecisionConsole } from '../components/DecisionConsole'
 import { DecisionEvidencePanel } from '../components/DecisionEvidencePanel'
 import { HoneypotTrapSelector } from '../components/HoneypotTrapSelector'
 import { HumanVsAiBaseline } from '../components/HumanVsAiBaseline'
 import { IntentCalldataVerifier } from '../components/IntentCalldataVerifier'
 import { RecentTestHistory } from '../components/RecentTestHistory'
+import { RiskSignalPanel } from '../components/RiskSignalPanel'
 import { TopBar } from '../components/TopBar'
 import { VerdictCard } from '../components/VerdictCard'
 import { WalletGuardrails } from '../components/WalletGuardrails'
+import { getMantleSepoliaAddressUrl } from '../config/chains'
+import { decisionLoggerAddress } from '../contracts/decisionLogger'
+import { appCopy } from '../copy'
+import { logDecisionToMantle, type OnchainLogResult } from '../core/onchainLogger'
+import { detectRiskSignals, type RiskSignal } from '../core/riskSignals'
 import {
   defaultBenchmarkPolicy,
   getRecentBenchmarkRuns,
   runBenchmark,
   type BenchmarkRunHistoryEntry,
 } from '../core/benchmarkRunner'
-import { logDecisionToMantle, type OnchainLogResult } from '../core/onchainLogger'
-import { appCopy } from '../copy'
+import {
+  connectWallet,
+  getWalletState,
+  onWalletChange,
+  type WalletState,
+} from '../core/walletConnection'
 import { agents } from '../data/agents'
 import { scenarios } from '../data/scenarios'
-import type { BenchmarkResult, ComparisonRow, Scenario } from '../types/benchmark'
+import type { AgentProfile, BenchmarkResult, ComparisonRow, Scenario } from '../types/benchmark'
 
 type RunPhase = 'idle' | 'proposed' | 'vetoed' | 'blocked'
+type RiskSignalTone = 'critical' | 'high' | 'medium' | 'low'
 
 const copy = appCopy
-const selectedAgent = agents[0]
+const initialAgent = agents[0]
 const initialScenario = scenarios[0]
+const scoreFormulaCaption =
+  'Trap Resistance 30% · Intent Alignment 25% · Policy 20% · Risk 15% · Transparency 10%'
+const notConfiguredLabel = 'Not configured'
+const disconnectedWalletState: WalletState = {
+  connected: false,
+  isMantleSepolia: false,
+}
 
 export function ArenaDashboard() {
+  const [selectedAgentId, setSelectedAgentId] = useState(initialAgent.id)
   const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenario.id)
   const [phase, setPhase] = useState<RunPhase>('idle')
   const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResult>()
   const [onchainLogResult, setOnchainLogResult] = useState<OnchainLogResult>()
   const [isLoggingDecision, setIsLoggingDecision] = useState(false)
+  const [walletState, setWalletState] = useState<WalletState>(disconnectedWalletState)
+  const [walletError, setWalletError] = useState<string>()
+  const [isConnectingWallet, setIsConnectingWallet] = useState(false)
   const [history, setHistory] = useState<BenchmarkRunHistoryEntry[]>(() =>
     getRecentBenchmarkRuns(),
   )
 
+  useEffect(() => {
+    let isMounted = true
+
+    void getWalletState().then((state) => {
+      if (isMounted) {
+        setWalletState(state)
+      }
+    })
+
+    const unsubscribe = onWalletChange((state) => {
+      setWalletState(state)
+      setWalletError(undefined)
+    })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [])
+
+  const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? initialAgent
   const selectedScenario =
     scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? initialScenario
+  const selectedAgentHistory = history.filter((entry) => entry.agentId === selectedAgent.id)
   const hasResult = Boolean(benchmarkResult)
-  const hasBlockedResult = Boolean(benchmarkResult && phase === 'blocked')
+  const hasFinalResult = Boolean(benchmarkResult && phase === 'blocked')
   const isRunning = phase === 'proposed' || phase === 'vetoed'
-  const profileStats = getProfileStats(history)
+  const profileStats = getProfileStats(selectedAgent, selectedAgentHistory)
+  const decisionContractUrl = decisionLoggerAddress
+    ? getMantleSepoliaAddressUrl(decisionLoggerAddress)
+    : undefined
 
   async function handleRunTrustTest() {
     if (isRunning) {
@@ -71,6 +119,17 @@ export function ArenaDashboard() {
     setHistory(nextHistory)
   }
 
+  function handleSelectAgent(agentId: string) {
+    if (isRunning) {
+      return
+    }
+
+    setSelectedAgentId(agentId)
+    setBenchmarkResult(undefined)
+    setPhase('idle')
+    setOnchainLogResult(undefined)
+  }
+
   function handleSelectScenario(scenarioId: string) {
     if (isRunning) {
       return
@@ -82,8 +141,33 @@ export function ArenaDashboard() {
     setOnchainLogResult(undefined)
   }
 
+  async function handleConnectWallet() {
+    if (isConnectingWallet) {
+      return
+    }
+
+    setIsConnectingWallet(true)
+    setWalletError(undefined)
+
+    try {
+      const result = await connectWallet()
+      if (result.error) {
+        setWalletError(result.error)
+      }
+      setWalletState(await getWalletState())
+    } finally {
+      setIsConnectingWallet(false)
+    }
+  }
+
+  function handleOpenDecisionContract() {
+    if (decisionContractUrl) {
+      window.open(decisionContractUrl, '_blank', 'noopener,noreferrer')
+    }
+  }
+
   async function handleRecordOnMantle() {
-    if (!benchmarkResult || !hasBlockedResult || isLoggingDecision || onchainLogResult) {
+    if (!benchmarkResult || !hasFinalResult || isLoggingDecision || onchainLogResult) {
       return
     }
 
@@ -101,13 +185,23 @@ export function ArenaDashboard() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <TopBar
         badges={[copy.hero.badges.builtOnMantle, copy.hero.badges.track06, copy.hero.badges.track05]}
-        primaryAction={copy.hero.actions.connectWallet}
+        onPrimaryAction={handleConnectWallet}
+        onSecondaryAction={handleOpenDecisionContract}
+        primaryAction={getWalletActionLabel(walletState, isConnectingWallet, walletError)}
+        primaryDisabled={isConnectingWallet}
         secondaryAction={copy.hero.actions.viewDecisionContract}
+        secondaryDisabled={!decisionContractUrl}
         subtitle={copy.hero.subtitle}
         title={copy.hero.title}
       />
       <div className="mx-auto grid max-w-[1680px] gap-4 px-6 py-5 xl:grid-cols-[320px_minmax(720px,1fr)_360px]">
         <aside className="space-y-4">
+          <AgentSelector
+            agents={agents.map(mapAgentOption)}
+            onSelectAgent={handleSelectAgent}
+            selectedAgentId={selectedAgent.id}
+            title={copy.agentProfile.title}
+          />
           <AgentProfileCard
             description={selectedAgent.personality}
             facts={[
@@ -168,15 +262,17 @@ export function ArenaDashboard() {
             title={copy.guardrails.title}
           />
           <AgentReadinessScore
+            formula={scoreFormulaCaption}
             metrics={getScoreMetrics(selectedAgent.scoreBreakdown)}
             reason={benchmarkResult?.score.reason}
-            scoreValue={getScoreValue(benchmarkResult)}
-            status={benchmarkResult?.score.status}
+            scoreLabel={getScoreLabel(benchmarkResult)}
+            scoreValue={getScoreValue(selectedAgent, benchmarkResult)}
+            status={getScoreStatus(benchmarkResult)}
             title={copy.score.title}
           />
           <RecentTestHistory
             emptyState={copy.history.emptyState}
-            items={history.map(mapHistoryItem)}
+            items={selectedAgentHistory.map(mapHistoryItem)}
             title={copy.history.title}
           />
         </aside>
@@ -197,11 +293,6 @@ export function ArenaDashboard() {
             subtitle={copy.pipeline.subtitle}
             title={copy.pipeline.title}
           />
-          <VerdictCard
-            details={hasBlockedResult && benchmarkResult ? getVerdictDetails(benchmarkResult) : []}
-            emptyState={copy.history.emptyState}
-            verdict={hasBlockedResult ? benchmarkResult?.execution.status : undefined}
-          />
           <IntentCalldataVerifier
             columns={{
               calldata: copy.verifier.tableHeaders.decodedCalldata,
@@ -214,6 +305,17 @@ export function ArenaDashboard() {
             rows={benchmarkResult ? benchmarkResult.verification.comparisonRows.map(mapComparisonRow) : []}
             title={copy.verifier.title}
           />
+          <RiskSignalPanel
+            emptyState={copy.history.emptyState}
+            signals={benchmarkResult ? getRiskSignalItems(benchmarkResult) : []}
+            title={copy.score.metrics.riskSignalDetection}
+          />
+          <VerdictCard
+            details={hasFinalResult && benchmarkResult ? getVerdictDetails(benchmarkResult) : []}
+            emptyState={copy.history.emptyState}
+            tone={isSafelyRejected(benchmarkResult) ? 'safe' : 'blocked'}
+            verdict={hasFinalResult && benchmarkResult ? getVerdictLabel(benchmarkResult) : undefined}
+          />
         </section>
 
         <aside className="space-y-4">
@@ -224,18 +326,18 @@ export function ArenaDashboard() {
           />
           <DecisionEvidencePanel
             emptyState={copy.history.emptyState}
-            explorerLabel={copy.evidence.actions.viewOnMantleExplorer}
             explorerHref={
               onchainLogResult?.mode === 'onchain' ? onchainLogResult.explorerUrl : undefined
             }
+            explorerLabel={copy.evidence.actions.viewOnMantleExplorer}
             facts={
-              hasBlockedResult && benchmarkResult
+              hasFinalResult && benchmarkResult
                 ? getEvidenceFacts(benchmarkResult, onchainLogResult)
                 : []
             }
             modeLabel={hasResult ? getEvidenceModeLabel(onchainLogResult) : undefined}
             recordAction={
-              hasBlockedResult ? (
+              hasFinalResult ? (
                 <button
                   className="w-full rounded-md bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isLoggingDecision || Boolean(onchainLogResult)}
@@ -251,14 +353,25 @@ export function ArenaDashboard() {
           <HumanVsAiBaseline
             emptyState={copy.history.emptyState}
             finalLabel={copy.humanVsAi.finalLabel}
-            finalResult={hasBlockedResult ? copy.humanVsAi.finalResult : undefined}
-            rows={hasBlockedResult ? getHumanVsAiRows() : []}
+            finalResult={hasFinalResult ? copy.humanVsAi.finalResult : undefined}
+            rows={hasFinalResult ? getHumanVsAiRows() : []}
             title={copy.humanVsAi.title}
           />
         </aside>
       </div>
     </main>
   )
+}
+
+function mapAgentOption(agent: AgentProfile) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    personality: agent.personality,
+    status: agent.status,
+    strength: agent.strength,
+    weakness: agent.weakness,
+  }
 }
 
 function mapScenarioToTrap(scenario: Scenario) {
@@ -338,6 +451,10 @@ function mapVerifierField(field: string) {
     amount: copy.verifier.fields.amount,
     recipient: copy.verifier.fields.recipient,
     contract: copy.verifier.fields.contract,
+    allowance: copy.verifier.fields.allowance,
+    spender: copy.verifier.fields.spender,
+    apr: copy.verifier.fields.apr,
+    tvl: copy.verifier.fields.tvl,
   }
 
   return fieldMap[normalizedField] ?? field
@@ -353,6 +470,55 @@ function mapVerificationStatus(status: ComparisonRow['status']) {
   }
 
   return copy.verifier.statuses.criticalMismatch
+}
+
+function getRiskSignalItems(result: BenchmarkResult) {
+  return detectRiskSignals(result.decodedCalldata, {
+    metadata: result.scenario.metadata,
+  }).map(mapRiskSignal)
+}
+
+function mapRiskSignal(signal: RiskSignal) {
+  return {
+    id: signal.id,
+    label: mapRiskSignalLabel(signal.id),
+    fieldLabel: mapVerifierField(signal.field),
+    levelLabel: signal.riskLevel,
+    reason: signal.reason,
+    tone: mapRiskSignalTone(signal.riskLevel),
+  }
+}
+
+function mapRiskSignalLabel(signalId: RiskSignal['id']) {
+  const labelMap: Record<RiskSignal['id'], string> = {
+    UNKNOWN_EOA_RECIPIENT: copy.guardrails.fields.blockUnknownEOAs,
+    UNLIMITED_APPROVAL: copy.riskSignals.unlimitedApproval,
+    APR_ANOMALY: copy.riskSignals.aprAnomaly,
+    LOW_TVL: copy.riskSignals.lowTvl,
+    UNVERIFIED_CONTRACT: copy.riskSignals.unverifiedContract,
+  }
+
+  return labelMap[signalId]
+}
+
+function mapRiskSignalTone(level: RiskSignal['riskLevel']): RiskSignalTone {
+  if (level === 'CRITICAL') {
+    return 'critical'
+  }
+
+  if (level === 'HIGH') {
+    return 'high'
+  }
+
+  if (level === 'MEDIUM') {
+    return 'medium'
+  }
+
+  return 'low'
+}
+
+function getVerdictLabel(result: BenchmarkResult) {
+  return isSafelyRejected(result) ? copy.verdict.safelyRejected : result.execution.status
 }
 
 function getVerdictDetails(result: BenchmarkResult) {
@@ -395,12 +561,19 @@ function getConsoleEvents(result: BenchmarkResult | undefined, phase: RunPhase) 
 }
 
 function getEvidenceFacts(result: BenchmarkResult, logResult: OnchainLogResult | undefined) {
+  const contractHref = decisionLoggerAddress
+    ? getMantleSepoliaAddressUrl(decisionLoggerAddress)
+    : undefined
   const facts = [
     { label: copy.evidence.fields.network, value: result.agent.network },
-    { label: copy.evidence.fields.contract, value: result.decodedCalldata.contractLabel },
+    {
+      label: copy.evidence.fields.contract,
+      value: decisionLoggerAddress ?? notConfiguredLabel,
+      href: contractHref,
+    },
     { label: copy.evidence.fields.agentId, value: result.agent.id },
     { label: copy.evidence.fields.scenarioId, value: result.scenario.id },
-    { label: copy.evidence.fields.verdict, value: result.execution.status },
+    { label: copy.evidence.fields.verdict, value: getVerdictLabel(result) },
     { label: copy.evidence.fields.scoreDelta, value: formatSignedNumber(result.score.scoreDelta) },
     {
       label: copy.evidence.fields.txHash,
@@ -451,32 +624,46 @@ function getHumanVsAiRows() {
 function mapHistoryItem(entry: BenchmarkRunHistoryEntry) {
   return {
     label: `${entry.scenarioId} ${entry.scenarioTitle}`,
-    meta: `${entry.agentName} ${entry.previousScore} -> ${entry.nextScore}`,
-    verdict: entry.executionStatus,
+    meta: `${entry.agentName} ${entry.previousScore} -> ${entry.nextScore} (${formatSignedNumber(entry.scoreDelta)})`,
+    verdict: entry.scoreDelta > 0 ? copy.verdict.safelyRejected : entry.executionStatus,
   }
 }
 
-function getProfileStats(history: BenchmarkRunHistoryEntry[]) {
-  const agentHistory = history.filter((entry) => entry.agentId === selectedAgent.id)
-  const trapsSurvived = agentHistory.filter((entry) => entry.scoreDelta >= 0).length
-  const criticalFailures = agentHistory.filter((entry) => entry.scoreDelta < 0).length
+function getProfileStats(agent: AgentProfile, history: BenchmarkRunHistoryEntry[]) {
+  const latest = history[0]
 
   return {
-    testsCompleted: agentHistory.length,
-    trapsSurvived,
-    criticalFailures,
+    testsCompleted: latest?.testsCompleted ?? agent.testsCompleted,
+    trapsSurvived: latest?.trapsSurvived ?? agent.trapsSurvived,
+    criticalFailures: latest?.criticalFailures ?? agent.criticalFailures,
   }
 }
 
-function getScoreValue(result: BenchmarkResult | undefined) {
+function getScoreValue(agent: AgentProfile, result: BenchmarkResult | undefined) {
   if (!result) {
-    return String(selectedAgent.initialScore)
+    return String(agent.initialScore)
   }
 
-  return `${result.score.previousScore} -> ${result.score.nextScore}`
+  return `${result.score.previousScore} -> ${result.score.nextScore} (${formatSignedNumber(result.score.scoreDelta)})`
 }
 
-function getScoreMetrics(scoreBreakdown: typeof selectedAgent.scoreBreakdown) {
+function getScoreLabel(result: BenchmarkResult | undefined) {
+  if (!result || result.score.scoreDelta <= 0) {
+    return undefined
+  }
+
+  return copy.score.improved
+}
+
+function getScoreStatus(result: BenchmarkResult | undefined) {
+  if (!result) {
+    return undefined
+  }
+
+  return isSafelyRejected(result) ? copy.verdict.safelyRejected : result.score.status
+}
+
+function getScoreMetrics(scoreBreakdown: AgentProfile['scoreBreakdown']) {
   return [
     { label: copy.score.metrics.trapResistance, value: scoreBreakdown.trapResistance },
     {
@@ -492,8 +679,32 @@ function getScoreMetrics(scoreBreakdown: typeof selectedAgent.scoreBreakdown) {
   ]
 }
 
+function getWalletActionLabel(
+  walletState: WalletState,
+  isConnecting: boolean,
+  walletError: string | undefined,
+) {
+  if (isConnecting) {
+    return copy.wallet.connecting
+  }
+
+  if (walletState.connected && walletState.address) {
+    return walletState.isMantleSepolia ? formatAddress(walletState.address) : copy.wallet.wrongNetwork
+  }
+
+  return walletError ? copy.wallet.noWallet : copy.wallet.connect
+}
+
+function isSafelyRejected(result: BenchmarkResult | undefined) {
+  return Boolean(result && result.score.scoreDelta > 0)
+}
+
 function formatSurvivalCount(survived: number, total: number) {
   return `${survived} / ${total}`
+}
+
+function formatAddress(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
 function formatSignedNumber(value: number) {

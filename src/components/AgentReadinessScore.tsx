@@ -9,6 +9,7 @@ type AgentReadinessScoreProps = {
   scoreValue: string
   status?: string
   reason?: string
+  formula?: string
   metrics: ScoreMetric[]
 }
 
@@ -18,6 +19,7 @@ export function AgentReadinessScore({
   scoreValue,
   status,
   reason,
+  formula,
   metrics,
 }: AgentReadinessScoreProps) {
   return (
@@ -34,6 +36,7 @@ export function AgentReadinessScore({
           {status}
         </p>
       ) : null}
+      {formula ? <p className="mt-3 text-xs leading-5 text-amber-100/65">{formula}</p> : null}
       {reason ? <p className="mt-3 text-sm leading-6 text-slate-300">{reason}</p> : null}
       <div className="mt-4 space-y-2">
         {metrics.map((metric) => (
