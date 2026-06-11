@@ -4,6 +4,10 @@ type TopBarProps = {
   badges: string[]
   primaryAction: string
   secondaryAction: string
+  onPrimaryAction?: () => void
+  onSecondaryAction?: () => void
+  primaryDisabled?: boolean
+  secondaryDisabled?: boolean
 }
 
 export function TopBar({
@@ -12,6 +16,10 @@ export function TopBar({
   badges,
   primaryAction,
   secondaryAction,
+  onPrimaryAction,
+  onSecondaryAction,
+  primaryDisabled,
+  secondaryDisabled,
 }: TopBarProps) {
   return (
     <header className="border-b border-white/10 bg-slate-950/95 px-6 py-4">
@@ -33,10 +41,20 @@ export function TopBar({
           <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button className="rounded-md border border-white/10 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-white/25 hover:bg-white/5">
+          <button
+            className="rounded-md border border-white/10 px-3 py-2 text-sm font-medium text-slate-200 transition enabled:hover:border-white/25 enabled:hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={secondaryDisabled}
+            onClick={onSecondaryAction}
+            type="button"
+          >
             {secondaryAction}
           </button>
-          <button className="rounded-md bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300">
+          <button
+            className="rounded-md bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-55"
+            disabled={primaryDisabled}
+            onClick={onPrimaryAction}
+            type="button"
+          >
             {primaryAction}
           </button>
         </div>

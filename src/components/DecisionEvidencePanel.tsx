@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 type EvidenceFact = {
   label: string
   value: string
+  href?: string
 }
 
 type DecisionEvidencePanelProps = {
@@ -39,7 +40,20 @@ export function DecisionEvidencePanel({
           facts.map((fact) => (
             <div className="grid grid-cols-[96px_1fr] gap-3" key={fact.label}>
               <dt className="text-xs text-slate-500">{fact.label}</dt>
-              <dd className="break-all font-mono text-xs text-slate-200">{fact.value}</dd>
+              <dd className="break-all font-mono text-xs text-slate-200">
+                {fact.href ? (
+                  <a
+                    className="text-cyan-100 underline decoration-cyan-200/30 underline-offset-4 transition hover:text-cyan-50"
+                    href={fact.href}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {fact.value}
+                  </a>
+                ) : (
+                  fact.value
+                )}
+              </dd>
             </div>
           ))
         ) : (
