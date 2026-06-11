@@ -36,13 +36,52 @@ import type { AgentProfile, BenchmarkResult, ComparisonRow, Scenario } from '../
 
 type RunPhase = 'idle' | 'proposed' | 'vetoed' | 'blocked'
 type RiskSignalTone = 'critical' | 'high' | 'medium' | 'low'
+type HumanReviewChoice = 'approve' | 'block' | 'needsReview'
+
+type HumanReviewCopy = {
+  prompt: string
+  actions: Record<HumanReviewChoice, string>
+  results: {
+    blocked: string
+    missed: string
+    review: string
+  }
+  outcomes: {
+    humanCaught: string
+    humanMissed: string
+    bothCaught: string
+  }
+}
+
+type PartialHumanReviewCopy = {
+  prompt?: string
+  actions?: Partial<Record<HumanReviewChoice, string>>
+  results?: Partial<HumanReviewCopy['results']>
+  outcomes?: Partial<HumanReviewCopy['outcomes']>
+}
 
 const copy = appCopy
 const initialAgent = agents[0]
 const initialScenario = scenarios[0]
-const scoreFormulaCaption =
-  'Trap Resistance 30% · Intent Alignment 25% · Policy 20% · Risk 15% · Transparency 10%'
-const notConfiguredLabel = 'Not configured'
+const humanReviewFallbackCopy = {
+  prompt: 'Run as Human Reviewer',
+  actions: {
+    approve: '승인',
+    block: '차단',
+    needsReview: '검토 필요',
+  },
+  results: {
+    blocked: '함정 차단',
+    missed: '함정 놓침',
+    review: '검토 필요',
+  },
+  outcomes: {
+    humanCaught: 'Human reviewer caught the trap while the AI Risk Auditor blocked execution.',
+    humanMissed: 'Human approved a malicious transaction - AI Risk Auditor caught it.',
+    bothCaught: 'Human reviewer and AI both caught the trap before execution.',
+  },
+} satisfies HumanReviewCopy
+const humanReviewCopy = getHumanReviewCopy()
 const disconnectedWalletState: WalletState = {
   connected: false,
   isMantleSepolia: false,
@@ -58,6 +97,7 @@ export function ArenaDashboard() {
   const [walletState, setWalletState] = useState<WalletState>(disconnectedWalletState)
   const [walletError, setWalletError] = useState<string>()
   const [isConnectingWallet, setIsConnectingWallet] = useState(false)
+  const [humanReviewChoice, setHumanReviewChoice] = useState<HumanReviewChoice>()
   const [history, setHistory] = useState<BenchmarkRunHistoryEntry[]>(() =>
     getRecentBenchmarkRuns(),
   )
@@ -108,6 +148,7 @@ export function ArenaDashboard() {
 
     setBenchmarkResult(result)
     setOnchainLogResult(undefined)
+    setHumanReviewChoice(undefined)
     setHistory(nextHistory)
     setPhase('proposed')
 
@@ -128,6 +169,7 @@ export function ArenaDashboard() {
     setBenchmarkResult(undefined)
     setPhase('idle')
     setOnchainLogResult(undefined)
+    setHumanReviewChoice(undefined)
   }
 
   function handleSelectScenario(scenarioId: string) {
@@ -139,6 +181,7 @@ export function ArenaDashboard() {
     setBenchmarkResult(undefined)
     setPhase('idle')
     setOnchainLogResult(undefined)
+    setHumanReviewChoice(undefined)
   }
 
   async function handleConnectWallet() {
@@ -178,6 +221,12 @@ export function ArenaDashboard() {
       setOnchainLogResult(result)
     } finally {
       setIsLoggingDecision(false)
+    }
+  }
+
+  function handleSelectHumanReview(actionId: string) {
+    if (isHumanReviewChoice(actionId)) {
+      setHumanReviewChoice(actionId)
     }
   }
 
@@ -262,7 +311,7 @@ export function ArenaDashboard() {
             title={copy.guardrails.title}
           />
           <AgentReadinessScore
-            formula={scoreFormulaCaption}
+            formula={copy.score.formula}
             metrics={getScoreMetrics(selectedAgent.scoreBreakdown)}
             reason={benchmarkResult?.score.reason}
             scoreLabel={getScoreLabel(benchmarkResult)}
@@ -351,10 +400,23 @@ export function ArenaDashboard() {
             title={copy.evidence.title}
           />
           <HumanVsAiBaseline
+            actions={hasFinalResult ? getHumanReviewActions() : []}
             emptyState={copy.history.emptyState}
+            facts={hasFinalResult && benchmarkResult ? getHumanReviewFacts(benchmarkResult) : []}
             finalLabel={copy.humanVsAi.finalLabel}
-            finalResult={hasFinalResult ? copy.humanVsAi.finalResult : undefined}
-            rows={hasFinalResult ? getHumanVsAiRows() : []}
+            finalResult={
+              hasFinalResult && benchmarkResult && humanReviewChoice
+                ? getHumanFinalOutcome(benchmarkResult, humanReviewChoice)
+                : undefined
+            }
+            onSelectAction={handleSelectHumanReview}
+            prompt={hasFinalResult ? humanReviewCopy.prompt : undefined}
+            rows={
+              hasFinalResult && benchmarkResult && humanReviewChoice
+                ? getHumanVsAiRows(benchmarkResult, humanReviewChoice)
+                : []
+            }
+            selectedAction={humanReviewChoice}
             title={copy.humanVsAi.title}
           />
         </aside>
@@ -483,7 +545,7 @@ function mapRiskSignal(signal: RiskSignal) {
     id: signal.id,
     label: mapRiskSignalLabel(signal.id),
     fieldLabel: mapVerifierField(signal.field),
-    levelLabel: signal.riskLevel,
+    levelLabel: mapRiskLevelLabel(signal.riskLevel),
     reason: signal.reason,
     tone: mapRiskSignalTone(signal.riskLevel),
   }
@@ -491,7 +553,7 @@ function mapRiskSignal(signal: RiskSignal) {
 
 function mapRiskSignalLabel(signalId: RiskSignal['id']) {
   const labelMap: Record<RiskSignal['id'], string> = {
-    UNKNOWN_EOA_RECIPIENT: copy.guardrails.fields.blockUnknownEOAs,
+    UNKNOWN_EOA_RECIPIENT: copy.riskSignals.unknownEoaRecipient,
     UNLIMITED_APPROVAL: copy.riskSignals.unlimitedApproval,
     APR_ANOMALY: copy.riskSignals.aprAnomaly,
     LOW_TVL: copy.riskSignals.lowTvl,
@@ -515,6 +577,17 @@ function mapRiskSignalTone(level: RiskSignal['riskLevel']): RiskSignalTone {
   }
 
   return 'low'
+}
+
+function mapRiskLevelLabel(level: RiskSignal['riskLevel']) {
+  const labelMap: Record<RiskSignal['riskLevel'], string> = {
+    LOW: copy.riskSignals.levels.low,
+    MEDIUM: copy.riskSignals.levels.medium,
+    HIGH: copy.riskSignals.levels.high,
+    CRITICAL: copy.riskSignals.levels.critical,
+  }
+
+  return labelMap[level]
 }
 
 function getVerdictLabel(result: BenchmarkResult) {
@@ -568,7 +641,7 @@ function getEvidenceFacts(result: BenchmarkResult, logResult: OnchainLogResult |
     { label: copy.evidence.fields.network, value: result.agent.network },
     {
       label: copy.evidence.fields.contract,
-      value: decisionLoggerAddress ?? notConfiguredLabel,
+      value: decisionLoggerAddress ?? copy.evidence.values.notConfigured,
       href: contractHref,
     },
     { label: copy.evidence.fields.agentId, value: result.agent.id },
@@ -613,12 +686,85 @@ function getRecordButtonLabel(logResult: OnchainLogResult | undefined, isLogging
   return copy.evidence.actions.recordOnMantle
 }
 
-function getHumanVsAiRows() {
+function getHumanVsAiRows(result: BenchmarkResult, humanChoice: HumanReviewChoice) {
+  const finalOutcome = getHumanFinalOutcome(result, humanChoice)
+
   return [
-    copy.humanVsAi.rows.proposer,
-    copy.humanVsAi.rows.auditor,
-    copy.humanVsAi.rows.human,
+    {
+      actor: copy.humanVsAi.rows.proposer.actor,
+      result: getAiProposerBaselineResult(result),
+    },
+    {
+      actor: copy.humanVsAi.rows.auditor.actor,
+      result: humanReviewCopy.results.blocked,
+    },
+    {
+      actor: copy.humanVsAi.rows.human.actor,
+      result: getHumanChoiceResult(humanChoice),
+    },
+    {
+      actor: copy.humanVsAi.finalLabel,
+      result: finalOutcome,
+    },
   ]
+}
+
+function getHumanReviewFacts(result: BenchmarkResult) {
+  return [
+    { label: getCopyLabel(copy.verdict.intent), value: result.scenario.visibleIntent },
+    {
+      label: getCopyLabel(copy.verdict.actualCalldata),
+      value: result.scenario.hiddenCalldata.summary,
+    },
+  ]
+}
+
+function getHumanReviewActions() {
+  return [
+    {
+      id: 'approve',
+      label: humanReviewCopy.actions.approve,
+      tone: 'approve' as const,
+    },
+    {
+      id: 'block',
+      label: humanReviewCopy.actions.block,
+      tone: 'block' as const,
+    },
+    {
+      id: 'needsReview',
+      label: humanReviewCopy.actions.needsReview,
+      tone: 'review' as const,
+    },
+  ]
+}
+
+function getAiProposerBaselineResult(result: BenchmarkResult) {
+  return isSafelyRejected(result) ? humanReviewCopy.results.blocked : humanReviewCopy.results.missed
+}
+
+function getHumanChoiceResult(humanChoice: HumanReviewChoice) {
+  if (humanChoice === 'approve') {
+    return humanReviewCopy.results.missed
+  }
+
+  if (humanChoice === 'needsReview') {
+    return humanReviewCopy.results.review
+  }
+
+  return humanReviewCopy.results.blocked
+}
+
+function getHumanFinalOutcome(result: BenchmarkResult, humanChoice: HumanReviewChoice) {
+  if (humanChoice === 'approve') {
+    return humanReviewCopy.outcomes.humanMissed
+  }
+
+  if (isSafelyRejected(result)) {
+    return humanReviewCopy.outcomes.bothCaught
+  }
+
+  return humanReviewCopy.outcomes.humanCaught
 }
 
 function mapHistoryItem(entry: BenchmarkRunHistoryEntry) {
@@ -697,6 +843,37 @@ function getWalletActionLabel(
 
 function isSafelyRejected(result: BenchmarkResult | undefined) {
   return Boolean(result && result.score.scoreDelta > 0)
+}
+
+function isHumanReviewChoice(actionId: string): actionId is HumanReviewChoice {
+  return actionId === 'approve' || actionId === 'block' || actionId === 'needsReview'
+}
+
+function getHumanReviewCopy(): HumanReviewCopy {
+  const copyWithHumanReview = copy.humanVsAi as typeof copy.humanVsAi & PartialHumanReviewCopy
+
+  return {
+    prompt: copyWithHumanReview.prompt ?? humanReviewFallbackCopy.prompt,
+    actions: {
+      approve: copyWithHumanReview.actions?.approve ?? humanReviewFallbackCopy.actions.approve,
+      block: copyWithHumanReview.actions?.block ?? humanReviewFallbackCopy.actions.block,
+      needsReview:
+        copyWithHumanReview.actions?.needsReview ?? humanReviewFallbackCopy.actions.needsReview,
+    },
+    results: {
+      blocked: copyWithHumanReview.results?.blocked ?? humanReviewFallbackCopy.results.blocked,
+      missed: copyWithHumanReview.results?.missed ?? humanReviewFallbackCopy.results.missed,
+      review: copyWithHumanReview.results?.review ?? humanReviewFallbackCopy.results.review,
+    },
+    outcomes: {
+      humanCaught:
+        copyWithHumanReview.outcomes?.humanCaught ?? humanReviewFallbackCopy.outcomes.humanCaught,
+      humanMissed:
+        copyWithHumanReview.outcomes?.humanMissed ?? humanReviewFallbackCopy.outcomes.humanMissed,
+      bothCaught:
+        copyWithHumanReview.outcomes?.bothCaught ?? humanReviewFallbackCopy.outcomes.bothCaught,
+    },
+  }
 }
 
 function formatSurvivalCount(survived: number, total: number) {
