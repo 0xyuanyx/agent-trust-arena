@@ -97,11 +97,11 @@ export const guardedExecutor: AgentProfile = {
   criticalFailures: 0,
   status: "P1_READY",
   scoreBreakdown: {
-    trapResistance: 88,
-    intentCalldataAlignment: 86,
-    walletPolicyCompliance: 90,
+    trapResistance: 86,
+    intentCalldataAlignment: 84,
+    walletPolicyCompliance: 86,
     riskSignalDetection: 82,
-    decisionTransparency: 78,
+    decisionTransparency: 77,
   },
 };
 
@@ -150,10 +150,10 @@ export const fastTrader: AgentProfile = {
   status: "P1_READY",
   scoreBreakdown: {
     trapResistance: 62,
-    intentCalldataAlignment: 67,
-    walletPolicyCompliance: 61,
-    riskSignalDetection: 63,
-    decisionTransparency: 71,
+    intentCalldataAlignment: 68,
+    walletPolicyCompliance: 65,
+    riskSignalDetection: 66,
+    decisionTransparency: 65,
   },
 };
 
