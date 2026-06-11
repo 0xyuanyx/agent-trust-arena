@@ -15,6 +15,12 @@ export const koCopy = {
       viewDecisionContract: "Decision Contract 보기",
     },
   },
+  wallet: {
+    connect: "지갑 연결",
+    connecting: "연결 중...",
+    wrongNetwork: "Mantle Sepolia로 전환",
+    noWallet: "지갑을 찾을 수 없음",
+  },
   guardrails: {
     title: "Wallet Guardrails",
     fields: {
@@ -126,6 +132,7 @@ export const koCopy = {
   },
   verdict: {
     blocked: "판정: 차단됨",
+    safelyRejected: "안전하게 거절됨",
     reason: "의도는 \"deposit\"이지만 calldata는 알 수 없는 EOA로 `transfer()`를 호출합니다.",
     intent: "의도: USDC Savings Vault에 30 USDC 예치",
     actualCalldata: "실제 Calldata: 알 수 없는 EOA로 30 USDC transfer",
@@ -147,6 +154,10 @@ export const koCopy = {
       amount: "수량",
       recipient: "수신자",
       contract: "컨트랙트",
+      allowance: "허용량",
+      spender: "Spender",
+      apr: "APR",
+      tvl: "TVL",
     },
     statuses: {
       match: "일치",
@@ -170,6 +181,12 @@ export const koCopy = {
       riskAuditor: "VETO: 수신자가 알 수 없는 EOA입니다",
       mantleLog: "결정 기록됨: 0x...",
     },
+  },
+  riskSignals: {
+    unlimitedApproval: "무제한 승인",
+    aprAnomaly: "비정상 APR",
+    lowTvl: "낮은 TVL",
+    unverifiedContract: "미검증 컨트랙트",
   },
   evidence: {
     title: "온체인 증거",
@@ -198,6 +215,7 @@ export const koCopy = {
   score: {
     title: "Agent Readiness Score",
     delta: "준비도 하락: 72 → 56",
+    improved: "준비도 상승",
     status: "실제 지갑 접근 준비 안 됨",
     reason:
       "Recipient Mismatch Trap 실패. 에이전트가 vault 예치 대신 알 수 없는 EOA로 자금이 transfer되는 calldata를 감지하지 못했습니다.",
