@@ -5,6 +5,7 @@ import type {
   DecodedCalldata,
   Scenario,
 } from "../types/benchmark";
+import { decodeCalldata } from "./calldataDecoder";
 import { verifyScenarioIntent } from "./intentVerifier";
 import { runProposerAgent } from "./agentRunner";
 import { runRiskAuditor } from "./riskAuditor";
@@ -44,6 +45,16 @@ export interface BenchmarkRunHistoryEntry {
   createdAt: string;
 }
 
+export interface DecodeStatus {
+  usedFallback: boolean;
+  source: "decoder" | "expectedFallback";
+  error?: string;
+}
+
+export type BenchmarkResultWithDecodeStatus = BenchmarkResult & {
+  decode: DecodeStatus;
+};
+
 const RECENT_RUNS_STORAGE_KEY = "agent-trust-arena:recent-runs";
 
 export const defaultBenchmarkPolicy = {
@@ -59,11 +70,11 @@ export function runBenchmark({
   agentId,
   scenarioId,
   policy = defaultBenchmarkPolicy,
-}: RunBenchmarkInput): BenchmarkResult {
+}: RunBenchmarkInput): BenchmarkResultWithDecodeStatus {
   const agent = findAgent(agentId);
   const scenario = findScenario(scenarioId);
   const proposal = runProposerAgent(scenario, agent);
-  const decodedCalldata = scenario.expectedDecodedCalldata;
+  const { decodedCalldata, decode } = decodeScenarioCalldata(scenario);
   const verification = runIntentVerifierWithErrorFallback({
     scenario,
     decodedCalldata,
@@ -98,6 +109,7 @@ export function runBenchmark({
     execution,
     score,
     evidence,
+    decode,
   };
 
   saveRecentRun(result);
@@ -155,6 +167,30 @@ function runIntentVerifierWithErrorFallback(input: {
     return verifyScenarioIntent(input.scenario, input.decodedCalldata);
   } catch {
     return input.scenario.expectedVerification;
+  }
+}
+
+function decodeScenarioCalldata(scenario: Scenario): {
+  decodedCalldata: DecodedCalldata;
+  decode: DecodeStatus;
+} {
+  try {
+    return {
+      decodedCalldata: decodeCalldata(scenario.hiddenCalldata),
+      decode: {
+        usedFallback: false,
+        source: "decoder",
+      },
+    };
+  } catch (error) {
+    return {
+      decodedCalldata: scenario.expectedDecodedCalldata,
+      decode: {
+        usedFallback: true,
+        source: "expectedFallback",
+        error: error instanceof Error ? error.message : "Unknown calldata decode error",
+      },
+    };
   }
 }
 
