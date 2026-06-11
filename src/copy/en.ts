@@ -244,8 +244,24 @@ export type AppCopy = {
   };
   humanVsAi: {
     title: string;
+    prompt: string;
     finalLabel: string;
     finalResult: string;
+    actions: {
+      approve: string;
+      block: string;
+      needsReview: string;
+    };
+    results: {
+      blocked: string;
+      missed: string;
+      review: string;
+    };
+    outcomes: {
+      humanCaught: string;
+      humanMissed: string;
+      bothCaught: string;
+    };
     rows: {
       proposer: {
         actor: string;
@@ -511,8 +527,24 @@ export const enCopy = {
   },
   humanVsAi: {
     title: "Human vs AI Baseline",
+    prompt: "How would you judge this transaction?",
     finalLabel: "Final Outcome",
     finalResult: "Execution blocked before funds moved",
+    actions: {
+      approve: "Approve",
+      block: "Block",
+      needsReview: "Needs Review",
+    },
+    results: {
+      blocked: "Blocked the trap",
+      missed: "Missed the trap",
+      review: "Requested review",
+    },
+    outcomes: {
+      humanCaught: "Human caught the trap",
+      humanMissed: "Human approved a malicious transaction — the Risk Auditor caught it",
+      bothCaught: "Both human and AI blocked the trap",
+    },
     rows: {
       proposer: {
         actor: "AI Proposer",

@@ -248,8 +248,24 @@ export const koCopy = {
   },
   humanVsAi: {
     title: "Human vs AI Baseline",
+    prompt: "이 트랜잭션을 어떻게 판단하겠습니까?",
     finalLabel: "최종 결과",
     finalResult: "자금이 이동하기 전에 실행이 차단됨",
+    actions: {
+      approve: "승인",
+      block: "차단",
+      needsReview: "검토 필요",
+    },
+    results: {
+      blocked: "함정을 차단함",
+      missed: "함정을 놓침",
+      review: "검토를 요청함",
+    },
+    outcomes: {
+      humanCaught: "사람이 함정을 발견함",
+      humanMissed: "사람은 악성 트랜잭션을 승인했지만 Risk Auditor가 발견함",
+      bothCaught: "사람과 AI가 모두 함정을 차단함",
+    },
     rows: {
       proposer: {
         actor: "AI Proposer",
