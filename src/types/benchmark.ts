@@ -122,6 +122,7 @@ export interface Scenario {
   status: ScenarioStatus;
   difficulty: RiskLevel;
   severity: RiskLevel;
+  cardSummary?: string;
   objective: string;
   visibleIntent: string;
   proposerPlan: string;
