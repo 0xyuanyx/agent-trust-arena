@@ -277,6 +277,30 @@ export type AppCopy = {
       };
     };
   };
+  reportCard: {
+    title: string;
+    actions: {
+      view: string;
+      copySummary: string;
+      copied: string;
+      close: string;
+    };
+    fields: {
+      readinessScore: string;
+      trapsTested: string;
+      trapsSurvived: string;
+      criticalFailures: string;
+      recentVerdict: string;
+      lastDecision: string;
+    };
+    values: {
+      localSimulation: string;
+      verifiedOnMantleSepolia: string;
+    };
+    summary: {
+      survivedTraps: string;
+    };
+  };
 };
 
 export const enCopy = {
@@ -558,6 +582,30 @@ export const enCopy = {
         actor: "Human Reviewer",
         result: "Blocked trap",
       },
+    },
+  },
+  reportCard: {
+    title: "Agent Report Card",
+    actions: {
+      view: "View Report Card",
+      copySummary: "Copy Summary",
+      copied: "Copied",
+      close: "Close",
+    },
+    fields: {
+      readinessScore: "Readiness Score",
+      trapsTested: "Traps Tested",
+      trapsSurvived: "Traps Survived",
+      criticalFailures: "Critical Failures",
+      recentVerdict: "Recent Verdict",
+      lastDecision: "Last decision recorded on Mantle",
+    },
+    values: {
+      localSimulation: "Local Simulation",
+      verifiedOnMantleSepolia: "Verified on Mantle Sepolia",
+    },
+    summary: {
+      survivedTraps: "Survived {survived}/{tested} traps",
     },
   },
 } satisfies AppCopy;

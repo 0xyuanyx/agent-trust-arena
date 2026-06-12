@@ -281,4 +281,28 @@ export const koCopy = {
       },
     },
   },
+  reportCard: {
+    title: "에이전트 리포트 카드",
+    actions: {
+      view: "리포트 카드 보기",
+      copySummary: "요약 복사",
+      copied: "복사됨",
+      close: "닫기",
+    },
+    fields: {
+      readinessScore: "Readiness Score",
+      trapsTested: "테스트한 함정",
+      trapsSurvived: "통과한 함정",
+      criticalFailures: "치명적 실패",
+      recentVerdict: "최근 판정",
+      lastDecision: "Mantle에 기록된 마지막 결정",
+    },
+    values: {
+      localSimulation: "로컬 시뮬레이션",
+      verifiedOnMantleSepolia: "Mantle Sepolia에서 검증됨",
+    },
+    summary: {
+      survivedTraps: "{survived}/{tested}개 함정 통과",
+    },
+  },
 } satisfies AppCopy;
