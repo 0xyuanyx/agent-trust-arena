@@ -45,6 +45,9 @@ type RevealStage =
   | 'complete'
 type RiskSignalTone = 'critical' | 'high' | 'medium' | 'low'
 type HumanReviewChoice = 'approve' | 'block' | 'needsReview'
+type ScenarioWithCardSummary = Scenario & {
+  cardSummary?: string
+}
 type AgentStats = {
   testsCompleted: number
   trapsSurvived: number
@@ -145,6 +148,11 @@ export function ArenaDashboard() {
   const [history, setHistory] = useState<BenchmarkRunHistoryEntry[]>(() =>
     getRecentBenchmarkRuns(),
   )
+
+  function clearSequenceTimers() {
+    sequenceTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    sequenceTimersRef.current = []
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -263,11 +271,6 @@ export function ArenaDashboard() {
     setIsReportSummaryCopied(false)
   }
 
-  function clearSequenceTimers() {
-    sequenceTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
-    sequenceTimersRef.current = []
-  }
-
   function scheduleReveal(sequenceId: number, delayMs: number, callback: () => void) {
     const timerId = window.setTimeout(() => {
       sequenceTimersRef.current = sequenceTimersRef.current.filter((activeTimerId) => activeTimerId !== timerId)
@@ -356,8 +359,67 @@ export function ArenaDashboard() {
         subtitle={copy.hero.subtitle}
         title={copy.hero.title}
       />
-      <div className="mx-auto grid max-w-[1680px] gap-3 px-4 py-3 xl:grid-cols-[280px_minmax(550px,1fr)_390px]">
-        <aside className="space-y-3">
+      <div className="mx-auto max-w-[1680px] px-4 py-3">
+        <section className="space-y-3 lg:hidden">
+          <AgentSelector
+            agents={agents.map(mapAgentOption)}
+            disabled={isRunning}
+            onSelectAgent={handleSelectAgent}
+            selectedAgentId={selectedAgent.id}
+            selectedAgentDetails={{
+              description: selectedAgent.personality,
+              facts: getAgentProfileFacts(selectedAgent, profileStats),
+              name: selectedAgent.name,
+            }}
+            showDetails={false}
+            title={copy.agentProfile.title}
+          />
+          <HoneypotTrapSelector
+            description={copy.trap.description}
+            disabled={isRunning}
+            onRun={handleRunTrustTest}
+            onSelect={handleSelectScenario}
+            runLabel={getRunButtonLabel(isRunning, hasFinalResult)}
+            selectedId={selectedScenarioId}
+            showDetails={false}
+            title={copy.trap.title}
+            traps={scenarios.map(mapScenarioToTrap)}
+          />
+          <MobilePipelineStrip steps={getPipelineSteps(benchmarkResult, revealStage)} />
+          <VerdictCard
+            details={hasFinalResult && benchmarkResult ? getMobileVerdictDetails(benchmarkResult) : []}
+            emptyState={copy.history.emptyState}
+            tone={isSafelyRejected(benchmarkResult) ? 'safe' : 'blocked'}
+            verdict={hasFinalResult && benchmarkResult ? getVerdictLabel(benchmarkResult) : undefined}
+          />
+          <AgentReadinessScore
+            compact
+            metrics={getScoreMetrics(selectedAgent.scoreBreakdown)}
+            scoreLabel={getScoreLabel(finalBenchmarkResult)}
+            scoreValue={getScoreValue(selectedAgent, finalBenchmarkResult)}
+            status={getScoreStatus(finalBenchmarkResult)}
+            title={copy.score.title}
+          />
+          <MobileEvidencePanel
+            emptyState={copy.history.emptyState}
+            explorerHref={
+              onchainLogResult?.mode === 'onchain' ? onchainLogResult.explorerUrl : undefined
+            }
+            explorerLabel={copy.evidence.actions.viewOnMantleExplorer}
+            isLoggingDecision={isLoggingDecision}
+            onRecord={handleRecordOnMantle}
+            recordDisabled={!hasFinalResult || isLoggingDecision || Boolean(onchainLogResult)}
+            recordLabel={getRecordButtonLabel(onchainLogResult, isLoggingDecision)}
+            result={hasFinalResult ? benchmarkResult : undefined}
+            title={copy.evidence.title}
+            txLabel={copy.evidence.fields.txHash}
+            txValue={getMobileEvidenceTxValue(onchainLogResult)}
+            verdictLabel={copy.evidence.fields.verdict}
+          />
+        </section>
+
+        <div className="hidden gap-3 lg:grid xl:grid-cols-[280px_minmax(550px,1fr)_390px]">
+          <aside className="space-y-3">
           <AgentSelector
             agents={agents.map(mapAgentOption)}
             disabled={isRunning}
@@ -419,9 +481,9 @@ export function ArenaDashboard() {
             items={selectedAgentHistory.map(mapHistoryItem)}
             title={copy.history.title}
           />
-        </aside>
+          </aside>
 
-        <section className="space-y-3">
+          <section className="space-y-3">
           <HoneypotTrapSelector
             description={copy.trap.description}
             disabled={isRunning}
@@ -467,9 +529,9 @@ export function ArenaDashboard() {
             signals={isStageAtLeast(revealStage, 'auditor') && benchmarkResult ? getRiskSignalItems(benchmarkResult) : []}
             title={copy.score.metrics.riskSignalDetection}
           />
-        </section>
+          </section>
 
-        <aside className="space-y-3">
+          <aside className="space-y-3">
           <DecisionConsole
             emptyState={copy.history.emptyState}
             events={getConsoleEvents(benchmarkResult, revealStage, visibleVerifierRows)}
@@ -533,7 +595,8 @@ export function ArenaDashboard() {
             selectedAction={humanReviewChoice}
             title={copy.humanVsAi.title}
           />
-        </aside>
+          </aside>
+        </div>
       </div>
       {benchmarkResult ? (
         <AgentReportCardModal
@@ -561,6 +624,111 @@ export function ArenaDashboard() {
   )
 }
 
+function MobilePipelineStrip({ steps }: { steps: ReturnType<typeof getPipelineSteps> }) {
+  return (
+    <section className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_14px_minmax(0,1fr)_14px_minmax(0,1fr)] items-stretch gap-1.5">
+        {steps.map((step, index) => (
+          <div className="contents" key={step.role}>
+            <article className="min-w-0 rounded-lg border border-white/10 bg-slate-950/70 p-2">
+              <p className="line-clamp-2 text-[11px] font-semibold leading-4 text-white">
+                {step.role}
+              </p>
+              {step.status ? (
+                <span className="mt-1.5 inline-flex max-w-full rounded-md bg-emerald-300/10 px-1.5 py-0.5 text-[10px] font-semibold leading-3 text-emerald-100">
+                  <span className="line-clamp-2 break-words">{step.status}</span>
+                </span>
+              ) : null}
+            </article>
+            {index < steps.length - 1 ? (
+              <div
+                aria-hidden="true"
+                className="flex items-center justify-center text-sm font-semibold text-cyan-100/55"
+              >
+                →
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function MobileEvidencePanel({
+  title,
+  emptyState,
+  result,
+  verdictLabel,
+  txLabel,
+  txValue,
+  recordLabel,
+  explorerLabel,
+  explorerHref,
+  isLoggingDecision,
+  recordDisabled,
+  onRecord,
+}: {
+  title: string
+  emptyState: string
+  result?: BenchmarkResult
+  verdictLabel: string
+  txLabel: string
+  txValue: string
+  recordLabel: string
+  explorerLabel: string
+  explorerHref?: string
+  isLoggingDecision: boolean
+  recordDisabled: boolean
+  onRecord: () => void
+}) {
+  return (
+    <section className="rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] p-4">
+      <h2 className="text-sm font-semibold text-white">{title}</h2>
+      {result ? (
+        <>
+          <dl className="mt-4 divide-y divide-white/10">
+            <div className="grid grid-cols-[minmax(88px,0.8fr)_minmax(0,1fr)] gap-3 py-2 first:pt-0">
+              <dt className="text-xs text-slate-500">{verdictLabel}</dt>
+              <dd className="min-w-0 text-right text-xs font-semibold text-slate-100">
+                {getVerdictLabel(result)}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[minmax(88px,0.8fr)_minmax(0,1fr)] gap-3 py-2 last:pb-0">
+              <dt className="text-xs text-slate-500">{txLabel}</dt>
+              <dd className="min-w-0 break-all text-right font-mono text-xs text-slate-200">
+                {txValue}
+              </dd>
+            </div>
+          </dl>
+          <button
+            className="mt-4 w-full rounded-md bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 transition enabled:hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={recordDisabled}
+            onClick={onRecord}
+            type="button"
+          >
+            {recordLabel}
+          </button>
+          <button
+            className="mt-3 w-full rounded-md border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition enabled:hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={!explorerHref || isLoggingDecision}
+            onClick={() => {
+              if (explorerHref) {
+                window.open(explorerHref, '_blank', 'noopener,noreferrer')
+              }
+            }}
+            type="button"
+          >
+            {explorerLabel}
+          </button>
+        </>
+      ) : (
+        <p className="mt-3 text-sm text-slate-400">{emptyState}</p>
+      )}
+    </section>
+  )
+}
+
 function mapAgentOption(agent: AgentProfile) {
   return {
     id: agent.id,
@@ -577,7 +745,7 @@ function mapScenarioToTrap(scenario: Scenario) {
     id: scenario.id,
     name: scenario.title,
     severity: scenario.severity,
-    objective: scenario.objective,
+    objective: getScenarioCardSummary(scenario),
     details: [
       { label: copy.trap.cardFields.objective, value: scenario.objective },
       { label: copy.trap.cardFields.whatAgentSees, value: scenario.visibleIntent },
@@ -587,6 +755,10 @@ function mapScenarioToTrap(scenario: Scenario) {
       { label: copy.trap.cardFields.severity, value: scenario.severity },
     ],
   }
+}
+
+function getScenarioCardSummary(scenario: Scenario) {
+  return (scenario as ScenarioWithCardSummary).cardSummary ?? scenario.objective
 }
 
 function getRunButtonLabel(isRunning: boolean, hasFinalResult: boolean) {
@@ -804,6 +976,13 @@ function getVerdictDetails(result: BenchmarkResult) {
   ]
 }
 
+function getMobileVerdictDetails(result: BenchmarkResult) {
+  return [
+    { label: getCopyLabel(copy.verdict.intent), value: result.scenario.visibleIntent },
+    { label: getCopyLabel(copy.verdict.actualCalldata), value: result.scenario.hiddenCalldata.summary },
+  ]
+}
+
 function getConsoleEvents(
   result: BenchmarkResult | undefined,
   revealStage: RevealStage,
@@ -914,6 +1093,14 @@ function getEvidenceModeLabel(logResult: OnchainLogResult | undefined) {
   return logResult?.mode === 'onchain'
     ? copy.evidence.modes.onchain
     : copy.evidence.modes.localSimulationMode
+}
+
+function getMobileEvidenceTxValue(logResult: OnchainLogResult | undefined) {
+  if (logResult?.mode === 'onchain' && logResult.txHash) {
+    return formatAddress(logResult.txHash)
+  }
+
+  return copy.evidence.modes.localSimulationMode
 }
 
 function getRecordButtonLabel(logResult: OnchainLogResult | undefined, isLogging: boolean) {

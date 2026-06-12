@@ -25,6 +25,7 @@ type AgentSelectorProps = {
   selectedAgentDetails: SelectedAgentDetails
   onSelectAgent: (agentId: string) => void
   disabled?: boolean
+  showDetails?: boolean
 }
 
 export function AgentSelector({
@@ -34,6 +35,7 @@ export function AgentSelector({
   selectedAgentDetails,
   onSelectAgent,
   disabled,
+  showDetails = true,
 }: AgentSelectorProps) {
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
@@ -77,20 +79,22 @@ export function AgentSelector({
           )
         })}
       </div>
-      <div className="mt-2 rounded-md border border-cyan-300/15 bg-slate-950/45 p-2">
-        <h3 className="truncate text-sm font-semibold text-white">{selectedAgentDetails.name}</h3>
-        <p className="mt-0.5 line-clamp-1 text-xs leading-4 text-slate-400">
-          {selectedAgentDetails.description}
-        </p>
-        <dl className="mt-2 grid grid-cols-3 gap-1.5">
-          {selectedAgentDetails.facts.map((fact) => (
-            <div className="min-w-0 rounded-md border border-white/10 bg-slate-950/40 px-1.5 py-1" key={fact.label}>
-              <dt className="truncate text-[9px] text-slate-500">{fact.label}</dt>
-              <dd className="truncate text-[11px] font-medium text-slate-200">{fact.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
+      {showDetails ? (
+        <div className="mt-2 rounded-md border border-cyan-300/15 bg-slate-950/45 p-2">
+          <h3 className="truncate text-sm font-semibold text-white">{selectedAgentDetails.name}</h3>
+          <p className="mt-0.5 line-clamp-1 text-xs leading-4 text-slate-400">
+            {selectedAgentDetails.description}
+          </p>
+          <dl className="mt-2 grid grid-cols-3 gap-1.5">
+            {selectedAgentDetails.facts.map((fact) => (
+              <div className="min-w-0 rounded-md border border-white/10 bg-slate-950/40 px-1.5 py-1" key={fact.label}>
+                <dt className="truncate text-[9px] text-slate-500">{fact.label}</dt>
+                <dd className="truncate text-[11px] font-medium text-slate-200">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
     </section>
   )
 }

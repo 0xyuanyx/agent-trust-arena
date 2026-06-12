@@ -18,6 +18,7 @@ type HoneypotTrapSelectorProps = {
   onSelect: (id: string) => void
   onRun: () => void
   disabled?: boolean
+  showDetails?: boolean
 }
 
 export function HoneypotTrapSelector({
@@ -29,6 +30,7 @@ export function HoneypotTrapSelector({
   onSelect,
   onRun,
   disabled,
+  showDetails = true,
 }: HoneypotTrapSelectorProps) {
   const selectedTrap = traps.find((trap) => trap.id === selectedId) ?? traps[0]
 
@@ -62,13 +64,15 @@ export function HoneypotTrapSelector({
           </button>
         ))}
       </div>
-      <div className="mt-4 border-t border-white/10 pt-4">
-        <div className="grid gap-3 md:grid-cols-3">
-        {selectedTrap.details.map((detail) => (
-          <Detail key={detail.label} label={detail.label} value={detail.value} />
-        ))}
+      {showDetails ? (
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            {selectedTrap.details.map((detail) => (
+              <Detail key={detail.label} label={detail.label} value={detail.value} />
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
       <button
         className="mt-4 w-full rounded-md bg-cyan-300 px-4 py-2.5 text-sm font-semibold text-slate-950 transition enabled:hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
