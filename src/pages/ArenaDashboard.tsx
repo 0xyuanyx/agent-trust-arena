@@ -356,7 +356,7 @@ export function ArenaDashboard() {
         subtitle={copy.hero.subtitle}
         title={copy.hero.title}
       />
-      <div className="mx-auto grid max-w-[1680px] gap-4 px-6 py-3 xl:grid-cols-[320px_minmax(720px,1fr)_360px]">
+      <div className="mx-auto grid max-w-[1680px] gap-3 px-4 py-3 xl:grid-cols-[280px_minmax(550px,1fr)_390px]">
         <aside className="space-y-3">
           <AgentSelector
             agents={agents.map(mapAgentOption)}
@@ -862,7 +862,7 @@ function getConsoleEvents(
     events.push({
       elapsedMs: executorDelay,
       label: copy.stagedReveal.console.executor,
-      message: result.execution.reason,
+      message: copy.humanVsAi.finalResult,
       tone: 'executor',
     })
   }
