@@ -7,10 +7,22 @@ type AgentOption = {
   weakness: string
 }
 
+type ProfileFact = {
+  label: string
+  value: string
+}
+
+type SelectedAgentDetails = {
+  name: string
+  description: string
+  facts: ProfileFact[]
+}
+
 type AgentSelectorProps = {
   title: string
   agents: AgentOption[]
   selectedAgentId: string
+  selectedAgentDetails: SelectedAgentDetails
   onSelectAgent: (agentId: string) => void
 }
 
@@ -18,6 +30,7 @@ export function AgentSelector({
   title,
   agents,
   selectedAgentId,
+  selectedAgentDetails,
   onSelectAgent,
 }: AgentSelectorProps) {
   return (
@@ -29,7 +42,7 @@ export function AgentSelector({
 
           return (
             <button
-              className={`rounded-lg border p-3 text-left transition ${
+              className={`rounded-md border p-2.5 text-left transition ${
                 isSelected
                   ? 'border-cyan-300/45 bg-cyan-300/10 shadow-lg shadow-cyan-950/20'
                   : 'border-white/10 bg-slate-950/35 hover:border-white/25 hover:bg-white/[0.05]'
@@ -49,17 +62,29 @@ export function AgentSelector({
                   {agent.status}
                 </span>
               </div>
-              <div className="mt-3 grid gap-2 text-xs text-slate-300">
-                <p className="rounded-md border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-emerald-100">
+              <div className="mt-2 grid gap-1.5 text-xs text-slate-300">
+                <p className="line-clamp-2 rounded-md border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-emerald-100">
                   {agent.strength}
                 </p>
-                <p className="rounded-md border border-rose-300/20 bg-rose-300/10 px-2 py-1 text-rose-100">
+                <p className="line-clamp-2 rounded-md border border-rose-300/20 bg-rose-300/10 px-2 py-1 text-rose-100">
                   {agent.weakness}
                 </p>
               </div>
             </button>
           )
         })}
+      </div>
+      <div className="mt-4 rounded-md border border-cyan-300/15 bg-slate-950/45 p-3">
+        <h3 className="text-base font-semibold text-white">{selectedAgentDetails.name}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-400">{selectedAgentDetails.description}</p>
+        <dl className="mt-4 grid gap-2">
+          {selectedAgentDetails.facts.map((fact) => (
+            <div className="flex items-center justify-between gap-3" key={fact.label}>
+              <dt className="text-xs text-slate-500">{fact.label}</dt>
+              <dd className="text-right text-sm font-medium text-slate-200">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   )

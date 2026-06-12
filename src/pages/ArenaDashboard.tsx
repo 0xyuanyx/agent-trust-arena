@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { AgentExecutionPipeline } from '../components/AgentExecutionPipeline'
-import { AgentProfileCard } from '../components/AgentProfileCard'
 import { AgentReportCardModal } from '../components/AgentReportCardModal'
 import { AgentReadinessScore } from '../components/AgentReadinessScore'
 import { AgentSelector } from '../components/AgentSelector'
@@ -66,31 +65,6 @@ type PartialHumanReviewCopy = {
   outcomes?: Partial<HumanReviewCopy['outcomes']>
 }
 
-type ReportCardCopy = {
-  title: string
-  actions: {
-    view: string
-    copySummary: string
-    copied: string
-    close: string
-  }
-  fields: {
-    readinessScore: string
-    trapsTested: string
-    trapsSurvived: string
-    criticalFailures: string
-    recentVerdict: string
-    lastDecision: string
-  }
-  values: {
-    localSimulation: string
-    verifiedOnMantleSepolia: string
-  }
-  summary: {
-    survivedTraps: string
-  }
-}
-
 const copy = appCopy
 const initialAgent = agents[0]
 const initialScenario = scenarios[0]
@@ -113,30 +87,6 @@ const humanReviewFallbackCopy = {
   },
 } satisfies HumanReviewCopy
 const humanReviewCopy = getHumanReviewCopy()
-const reportCardCopy = {
-  title: 'Agent Report Card',
-  actions: {
-    view: 'Report Card 보기',
-    copySummary: 'Copy Summary',
-    copied: 'Copied',
-    close: 'Close',
-  },
-  fields: {
-    readinessScore: 'Readiness Score',
-    trapsTested: 'Traps Tested',
-    trapsSurvived: 'Traps Survived',
-    criticalFailures: 'Critical Failures',
-    recentVerdict: 'Recent Verdict',
-    lastDecision: 'Last decision recorded on Mantle',
-  },
-  values: {
-    localSimulation: 'Local Simulation',
-    verifiedOnMantleSepolia: 'Verified on Mantle Sepolia',
-  },
-  summary: {
-    survivedTraps: 'Survived {survived}/{tested} traps',
-  },
-} satisfies ReportCardCopy
 const disconnectedWalletState: WalletState = {
   connected: false,
   isMantleSepolia: false,
@@ -331,30 +281,11 @@ export function ArenaDashboard() {
             agents={agents.map(mapAgentOption)}
             onSelectAgent={handleSelectAgent}
             selectedAgentId={selectedAgent.id}
-            title={copy.agentProfile.title}
-          />
-          <AgentProfileCard
-            description={selectedAgent.personality}
-            facts={[
-              { label: copy.agentProfile.facts.agentId, value: selectedAgent.id },
-              { label: copy.agentProfile.facts.role, value: selectedAgent.type },
-              { label: copy.agentProfile.facts.owner, value: selectedAgent.owner },
-              { label: copy.agentProfile.facts.network, value: selectedAgent.network },
-              { label: copy.agentProfile.facts.mode, value: selectedAgent.mode },
-              {
-                label: copy.agentProfile.facts.testsCompleted,
-                value: String(profileStats.testsCompleted),
-              },
-              {
-                label: copy.agentProfile.facts.trapsSurvived,
-                value: formatSurvivalCount(profileStats.trapsSurvived, profileStats.testsCompleted),
-              },
-              {
-                label: copy.agentProfile.facts.criticalFailures,
-                value: String(profileStats.criticalFailures),
-              },
-            ]}
-            name={selectedAgent.name}
+            selectedAgentDetails={{
+              description: selectedAgent.personality,
+              facts: getAgentProfileFacts(selectedAgent, profileStats),
+              name: selectedAgent.name,
+            }}
             title={copy.agentProfile.title}
           />
           <WalletGuardrails
@@ -487,7 +418,7 @@ export function ArenaDashboard() {
               onClick={handleOpenReportCard}
               type="button"
             >
-              {reportCardCopy.actions.view}
+              {copy.reportCard.actions.view}
             </button>
           ) : null}
           <HumanVsAiBaseline
@@ -515,9 +446,9 @@ export function ArenaDashboard() {
       {benchmarkResult ? (
         <AgentReportCardModal
           agentName={benchmarkResult.agent.name}
-          closeLabel={reportCardCopy.actions.close}
-          copiedLabel={reportCardCopy.actions.copied}
-          copySummaryLabel={reportCardCopy.actions.copySummary}
+          closeLabel={copy.reportCard.actions.close}
+          copiedLabel={copy.reportCard.actions.copied}
+          copySummaryLabel={copy.reportCard.actions.copySummary}
           isCopied={isReportSummaryCopied}
           lastDecision={getReportLastDecision(onchainLogResult)}
           metrics={getReportCardMetrics(profileStats)}
@@ -525,13 +456,13 @@ export function ArenaDashboard() {
           onCopySummary={handleCopyReportSummary}
           open={isReportCardOpen && hasFinalResult}
           recentVerdict={{
-            label: reportCardCopy.fields.recentVerdict,
+            label: copy.reportCard.fields.recentVerdict,
             value: getVerdictLabel(benchmarkResult),
           }}
-          scoreLabel={reportCardCopy.fields.readinessScore}
+          scoreLabel={copy.reportCard.fields.readinessScore}
           scoreValue={`${benchmarkResult.score.nextScore}/100`}
           summaryLine={getReportSummaryLine(profileStats)}
-          title={reportCardCopy.title}
+          title={copy.reportCard.title}
         />
       ) : null}
     </main>
@@ -882,24 +813,24 @@ function getHumanFinalOutcome(result: BenchmarkResult, humanChoice: HumanReviewC
 
 function getReportCardMetrics(stats: AgentStats) {
   return [
-    { label: reportCardCopy.fields.trapsTested, value: String(stats.testsCompleted) },
-    { label: reportCardCopy.fields.trapsSurvived, value: String(stats.trapsSurvived) },
-    { label: reportCardCopy.fields.criticalFailures, value: String(stats.criticalFailures) },
+    { label: copy.reportCard.fields.trapsTested, value: String(stats.testsCompleted) },
+    { label: copy.reportCard.fields.trapsSurvived, value: String(stats.trapsSurvived) },
+    { label: copy.reportCard.fields.criticalFailures, value: String(stats.criticalFailures) },
   ]
 }
 
 function getReportLastDecision(logResult: OnchainLogResult | undefined) {
   if (logResult?.mode === 'onchain' && logResult.txHash) {
     return {
-      label: reportCardCopy.fields.lastDecision,
+      label: copy.reportCard.fields.lastDecision,
       value: formatAddress(logResult.txHash),
       href: logResult.explorerUrl,
     }
   }
 
   return {
-    label: reportCardCopy.fields.lastDecision,
-    value: reportCardCopy.values.localSimulation,
+    label: copy.reportCard.fields.lastDecision,
+    value: copy.reportCard.values.localSimulation,
   }
 }
 
@@ -910,16 +841,38 @@ function getReportSummaryText(
 ) {
   const verification =
     logResult?.mode === 'onchain' && logResult.explorerUrl
-      ? `${reportCardCopy.values.verifiedOnMantleSepolia} ${logResult.explorerUrl}`
-      : reportCardCopy.values.localSimulation
+      ? `${copy.reportCard.values.verifiedOnMantleSepolia} ${logResult.explorerUrl}`
+      : copy.reportCard.values.localSimulation
 
   return `${result.agent.name} — Readiness ${result.score.nextScore}/100 — ${getReportSummaryLine(stats)} — ${verification}`
 }
 
 function getReportSummaryLine(stats: AgentStats) {
-  return reportCardCopy.summary.survivedTraps
+  return copy.reportCard.summary.survivedTraps
     .replace('{survived}', String(stats.trapsSurvived))
     .replace('{tested}', String(stats.testsCompleted))
+}
+
+function getAgentProfileFacts(agent: AgentProfile, stats: AgentStats) {
+  return [
+    { label: copy.agentProfile.facts.agentId, value: agent.id },
+    { label: copy.agentProfile.facts.role, value: agent.type },
+    { label: copy.agentProfile.facts.owner, value: agent.owner },
+    { label: copy.agentProfile.facts.network, value: agent.network },
+    { label: copy.agentProfile.facts.mode, value: agent.mode },
+    {
+      label: copy.agentProfile.facts.testsCompleted,
+      value: String(stats.testsCompleted),
+    },
+    {
+      label: copy.agentProfile.facts.trapsSurvived,
+      value: formatSurvivalCount(stats.trapsSurvived, stats.testsCompleted),
+    },
+    {
+      label: copy.agentProfile.facts.criticalFailures,
+      value: String(stats.criticalFailures),
+    },
+  ]
 }
 
 function mapHistoryItem(entry: BenchmarkRunHistoryEntry) {
