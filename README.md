@@ -293,7 +293,7 @@ https://sepolia.mantlescan.xyz/tx/<txHash>
 
 ## Live Demo
 
-- App: <LIVE_DEMO_URL — to be filled after deployment>
+- App: https://agent-trust-arena.vercel.app
 - Demo video: <VIDEO_URL — to be filled after recording>
 
 ## Deploy to Mantle Sepolia

@@ -93,7 +93,7 @@ https://sepolia.mantlescan.xyz/address/0xff60e893a08d8c41604d23deb9c435443450e59
 
 ## Live Demo
 
-- App: <LIVE_DEMO_URL — to be filled after deployment>
+- App: https://agent-trust-arena.vercel.app
 - Demo video: <VIDEO_URL — to be filled after recording>
 
 ## Limitations

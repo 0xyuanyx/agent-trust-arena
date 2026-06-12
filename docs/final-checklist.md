@@ -33,6 +33,7 @@
   scores start from baseline.
 - [ ] The live demo URL is deployed, loads correctly, and is included in the
   README and DoraHacks submission.
+- [ ] The live demo URL opens correctly in an incognito/private browser window.
 
 ## Mantle Evidence
 
