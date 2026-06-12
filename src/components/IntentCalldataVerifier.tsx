@@ -10,6 +10,7 @@ type ComparisonRow = {
 type IntentCalldataVerifierProps = {
   title: string
   subtitle?: string
+  progressLabel?: string
   columns: {
     field: string
     intent: string
@@ -24,13 +25,21 @@ type IntentCalldataVerifierProps = {
 export function IntentCalldataVerifier({
   title,
   subtitle,
+  progressLabel,
   columns,
   rows,
   emptyState,
 }: IntentCalldataVerifierProps) {
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.04] p-5">
-      <h2 className="text-lg font-semibold text-white">{title}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        {progressLabel ? (
+          <span className="rounded-md border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-xs font-semibold text-cyan-100">
+            {progressLabel}
+          </span>
+        ) : null}
+      </div>
       {subtitle ? <p className="mt-1 text-sm text-slate-400">{subtitle}</p> : null}
       <div className="mt-5 overflow-hidden rounded-lg border border-white/10">
         <table className="w-full table-fixed border-collapse text-left text-sm">

@@ -16,8 +16,11 @@ export function RecentTestHistory({ title, items, emptyState }: RecentTestHistor
       <h2 className="text-sm font-semibold text-white">{title}</h2>
       <div className="mt-4 space-y-3">
         {items.length > 0 ? (
-          items.map((item) => (
-            <article className="border-l border-cyan-300/30 pl-3" key={item.label}>
+          items.map((item, index) => (
+            <article
+              className="border-l border-cyan-300/30 pl-3"
+              key={`${item.label}-${item.meta}-${index}`}
+            >
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-medium text-slate-200">{item.label}</h3>
                 <span className="rounded-md bg-rose-400/15 px-2 py-1 text-xs font-semibold text-rose-100">

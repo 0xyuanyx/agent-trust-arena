@@ -53,9 +53,10 @@ export function HoneypotTrapSelector({
           <button
             className={
               trap.id === selectedId
-                ? 'rounded-lg border border-cyan-300/70 bg-cyan-300/10 p-3 text-left'
-                : 'rounded-lg border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-white/25'
+                ? 'rounded-lg border border-cyan-300/70 bg-cyan-300/10 p-3 text-left disabled:cursor-not-allowed disabled:opacity-60'
+                : 'rounded-lg border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-60'
             }
+            disabled={disabled}
             key={trap.id}
             onClick={() => onSelect(trap.id)}
             type="button"

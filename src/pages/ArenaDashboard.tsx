@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AgentExecutionPipeline } from '../components/AgentExecutionPipeline'
 import { AgentReportCardModal } from '../components/AgentReportCardModal'
 import { AgentReadinessScore } from '../components/AgentReadinessScore'
@@ -34,13 +34,25 @@ import { agents } from '../data/agents'
 import { scenarios } from '../data/scenarios'
 import type { AgentProfile, BenchmarkResult, ComparisonRow, Scenario } from '../types/benchmark'
 
-type RunPhase = 'idle' | 'proposed' | 'vetoed' | 'blocked'
+type RevealStage =
+  | 'idle'
+  | 'trap'
+  | 'proposal'
+  | 'verifying'
+  | 'auditor'
+  | 'executor'
+  | 'mantle'
+  | 'complete'
 type RiskSignalTone = 'critical' | 'high' | 'medium' | 'low'
 type HumanReviewChoice = 'approve' | 'block' | 'needsReview'
 type AgentStats = {
   testsCompleted: number
   trapsSurvived: number
   criticalFailures: number
+}
+type TimelineConsoleEvent = {
+  message: string
+  elapsedMs: number
 }
 
 type HumanReviewCopy = {
@@ -68,6 +80,44 @@ type PartialHumanReviewCopy = {
 const copy = appCopy
 const initialAgent = agents[0]
 const initialScenario = scenarios[0]
+const stagedRevealCopy = {
+  actions: {
+    running: '진행 중...',
+    rerun: '다시 실행',
+  },
+  console: {
+    lineCount: '{count} lines',
+    executor: '[Executor]',
+    auditorPassed: '통과: 함정을 식별했고 안전하게 거절했습니다.',
+  },
+  pipeline: {
+    auditorPassedStatus: '검증 통과',
+    auditorPassedReason: '함정 신호를 식별했고 안전 거절 경로로 통과했습니다.',
+  },
+  verifier: {
+    progress: '검증 {current}/{total}',
+  },
+} as const
+const stagedRevealTiming = {
+  trapLoaded: 0,
+  proposal: 520,
+  verifierStart: 900,
+  verifierRowInterval: 250,
+  auditorPause: 350,
+  executorAfterAuditor: 520,
+  mantleAfterExecutor: 420,
+  finalAfterMantle: 360,
+} as const
+const revealStageOrder: Record<RevealStage, number> = {
+  idle: 0,
+  trap: 1,
+  proposal: 2,
+  verifying: 3,
+  auditor: 4,
+  executor: 5,
+  mantle: 6,
+  complete: 7,
+}
 const humanReviewFallbackCopy = {
   prompt: 'Run as Human Reviewer',
   actions: {
@@ -93,9 +143,12 @@ const disconnectedWalletState: WalletState = {
 }
 
 export function ArenaDashboard() {
+  const sequenceTimersRef = useRef<ReturnType<typeof window.setTimeout>[]>([])
+  const sequenceIdRef = useRef(0)
   const [selectedAgentId, setSelectedAgentId] = useState(initialAgent.id)
   const [selectedScenarioId, setSelectedScenarioId] = useState(initialScenario.id)
-  const [phase, setPhase] = useState<RunPhase>('idle')
+  const [revealStage, setRevealStage] = useState<RevealStage>('idle')
+  const [visibleVerifierRows, setVisibleVerifierRows] = useState(0)
   const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResult>()
   const [onchainLogResult, setOnchainLogResult] = useState<OnchainLogResult>()
   const [isLoggingDecision, setIsLoggingDecision] = useState(false)
@@ -129,23 +182,28 @@ export function ArenaDashboard() {
     }
   }, [])
 
+  useEffect(() => {
+    return () => {
+      clearSequenceTimers()
+    }
+  }, [])
+
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? initialAgent
   const selectedScenario =
     scenarios.find((scenario) => scenario.id === selectedScenarioId) ?? initialScenario
   const selectedAgentHistory = history.filter((entry) => entry.agentId === selectedAgent.id)
-  const hasResult = Boolean(benchmarkResult)
-  const hasFinalResult = Boolean(benchmarkResult && phase === 'blocked')
-  const isRunning = phase === 'proposed' || phase === 'vetoed'
+  const hasFinalResult = Boolean(benchmarkResult && revealStage === 'complete')
+  const isRunning = revealStage !== 'idle' && revealStage !== 'complete'
+  const finalBenchmarkResult = hasFinalResult ? benchmarkResult : undefined
   const profileStats = getProfileStats(selectedAgent, selectedAgentHistory)
   const decisionContractUrl = decisionLoggerAddress
     ? getMantleSepoliaAddressUrl(decisionLoggerAddress)
     : undefined
 
   async function handleRunTrustTest() {
-    if (isRunning) {
-      return
-    }
-
+    clearSequenceTimers()
+    const sequenceId = sequenceIdRef.current + 1
+    sequenceIdRef.current = sequenceId
     const result = runBenchmark({
       agentId: selectedAgent.id,
       scenarioId: selectedScenario.id,
@@ -158,43 +216,82 @@ export function ArenaDashboard() {
     setHumanReviewChoice(undefined)
     setIsReportCardOpen(false)
     setIsReportSummaryCopied(false)
-    setHistory(nextHistory)
-    setPhase('proposed')
+    setVisibleVerifierRows(0)
+    setRevealStage('trap')
+    scheduleReveal(sequenceId, stagedRevealTiming.proposal, () => {
+      setRevealStage('proposal')
+    })
 
-    await delay(300)
-    setPhase('vetoed')
+    result.verification.comparisonRows.forEach((_, index) => {
+      scheduleReveal(
+        sequenceId,
+        stagedRevealTiming.verifierStart + index * stagedRevealTiming.verifierRowInterval,
+        () => {
+          setRevealStage('verifying')
+          setVisibleVerifierRows(index + 1)
+        },
+      )
+    })
 
-    await delay(420)
-    setPhase('blocked')
-    setHistory(nextHistory)
+    const auditorDelay = getAuditorRevealDelay(result)
+    scheduleReveal(sequenceId, auditorDelay, () => {
+      setRevealStage('auditor')
+    })
+    scheduleReveal(sequenceId, auditorDelay + stagedRevealTiming.executorAfterAuditor, () => {
+      setRevealStage('executor')
+    })
+    scheduleReveal(
+      sequenceId,
+      auditorDelay + stagedRevealTiming.executorAfterAuditor + stagedRevealTiming.mantleAfterExecutor,
+      () => {
+        setRevealStage('mantle')
+      },
+    )
+    scheduleReveal(
+      sequenceId,
+      getFinalRevealDelay(result),
+      () => {
+        setRevealStage('complete')
+        setHistory(nextHistory)
+      },
+    )
   }
 
   function handleSelectAgent(agentId: string) {
-    if (isRunning) {
-      return
-    }
-
+    resetRunReveal()
     setSelectedAgentId(agentId)
+  }
+
+  function handleSelectScenario(scenarioId: string) {
+    resetRunReveal()
+    setSelectedScenarioId(scenarioId)
+  }
+
+  function resetRunReveal() {
+    clearSequenceTimers()
+    sequenceIdRef.current += 1
     setBenchmarkResult(undefined)
-    setPhase('idle')
+    setRevealStage('idle')
+    setVisibleVerifierRows(0)
     setOnchainLogResult(undefined)
     setHumanReviewChoice(undefined)
     setIsReportCardOpen(false)
     setIsReportSummaryCopied(false)
   }
 
-  function handleSelectScenario(scenarioId: string) {
-    if (isRunning) {
-      return
-    }
+  function clearSequenceTimers() {
+    sequenceTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    sequenceTimersRef.current = []
+  }
 
-    setSelectedScenarioId(scenarioId)
-    setBenchmarkResult(undefined)
-    setPhase('idle')
-    setOnchainLogResult(undefined)
-    setHumanReviewChoice(undefined)
-    setIsReportCardOpen(false)
-    setIsReportSummaryCopied(false)
+  function scheduleReveal(sequenceId: number, delayMs: number, callback: () => void) {
+    const timerId = window.setTimeout(() => {
+      sequenceTimersRef.current = sequenceTimersRef.current.filter((activeTimerId) => activeTimerId !== timerId)
+      if (sequenceIdRef.current === sequenceId) {
+        callback()
+      }
+    }, delayMs)
+    sequenceTimersRef.current.push(timerId)
   }
 
   async function handleConnectWallet() {
@@ -279,6 +376,7 @@ export function ArenaDashboard() {
         <aside className="space-y-4">
           <AgentSelector
             agents={agents.map(mapAgentOption)}
+            disabled={isRunning}
             onSelectAgent={handleSelectAgent}
             selectedAgentId={selectedAgent.id}
             selectedAgentDetails={{
@@ -326,10 +424,10 @@ export function ArenaDashboard() {
           <AgentReadinessScore
             formula={copy.score.formula}
             metrics={getScoreMetrics(selectedAgent.scoreBreakdown)}
-            reason={benchmarkResult?.score.reason}
-            scoreLabel={getScoreLabel(benchmarkResult)}
-            scoreValue={getScoreValue(selectedAgent, benchmarkResult)}
-            status={getScoreStatus(benchmarkResult)}
+            reason={finalBenchmarkResult?.score.reason}
+            scoreLabel={getScoreLabel(finalBenchmarkResult)}
+            scoreValue={getScoreValue(selectedAgent, finalBenchmarkResult)}
+            status={getScoreStatus(finalBenchmarkResult)}
             title={copy.score.title}
           />
           <RecentTestHistory
@@ -345,13 +443,13 @@ export function ArenaDashboard() {
             disabled={isRunning}
             onRun={handleRunTrustTest}
             onSelect={handleSelectScenario}
-            runLabel={copy.trap.actions.runTrustTest}
+            runLabel={getRunButtonLabel(isRunning, hasFinalResult)}
             selectedId={selectedScenarioId}
             title={copy.trap.title}
             traps={scenarios.map(mapScenarioToTrap)}
           />
           <AgentExecutionPipeline
-            steps={getPipelineSteps(benchmarkResult, phase)}
+            steps={getPipelineSteps(benchmarkResult, revealStage)}
             subtitle={copy.pipeline.subtitle}
             title={copy.pipeline.title}
           />
@@ -364,12 +462,19 @@ export function ArenaDashboard() {
               status: copy.verifier.tableHeaders.status,
             }}
             emptyState={copy.history.emptyState}
-            rows={benchmarkResult ? benchmarkResult.verification.comparisonRows.map(mapComparisonRow) : []}
+            progressLabel={getVerifierProgressLabel(benchmarkResult, visibleVerifierRows)}
+            rows={
+              benchmarkResult
+                ? benchmarkResult.verification.comparisonRows
+                    .slice(0, visibleVerifierRows)
+                    .map(mapComparisonRow)
+                : []
+            }
             title={copy.verifier.title}
           />
           <RiskSignalPanel
             emptyState={copy.history.emptyState}
-            signals={benchmarkResult ? getRiskSignalItems(benchmarkResult) : []}
+            signals={isStageAtLeast(revealStage, 'auditor') && benchmarkResult ? getRiskSignalItems(benchmarkResult) : []}
             title={copy.score.metrics.riskSignalDetection}
           />
           <VerdictCard
@@ -383,7 +488,10 @@ export function ArenaDashboard() {
         <aside className="space-y-4">
           <DecisionConsole
             emptyState={copy.history.emptyState}
-            events={getConsoleEvents(benchmarkResult, phase)}
+            events={getConsoleEvents(benchmarkResult, revealStage, visibleVerifierRows)}
+            lineCountLabel={getConsoleLineCountLabel(
+              getConsoleEvents(benchmarkResult, revealStage, visibleVerifierRows).length,
+            )}
             title={copy.console.title}
           />
           <DecisionEvidencePanel
@@ -397,7 +505,7 @@ export function ArenaDashboard() {
                 ? getEvidenceFacts(benchmarkResult, onchainLogResult)
                 : []
             }
-            modeLabel={hasResult ? getEvidenceModeLabel(onchainLogResult) : undefined}
+            modeLabel={hasFinalResult ? getEvidenceModeLabel(onchainLogResult) : undefined}
             recordAction={
               hasFinalResult ? (
                 <button
@@ -497,38 +605,97 @@ function mapScenarioToTrap(scenario: Scenario) {
   }
 }
 
-function getPipelineSteps(result: BenchmarkResult | undefined, phase: RunPhase) {
+function getRunButtonLabel(isRunning: boolean, hasFinalResult: boolean) {
+  if (isRunning) {
+    return stagedRevealCopy.actions.running
+  }
+
+  return hasFinalResult ? stagedRevealCopy.actions.rerun : copy.trap.actions.runTrustTest
+}
+
+function getVerifierProgressLabel(
+  result: BenchmarkResult | undefined,
+  visibleVerifierRows: number,
+) {
+  if (!result || visibleVerifierRows <= 0) {
+    return undefined
+  }
+
+  return stagedRevealCopy.verifier.progress
+    .replace('{current}', String(visibleVerifierRows))
+    .replace('{total}', String(result.verification.comparisonRows.length))
+}
+
+function getConsoleLineCountLabel(eventCount: number) {
+  return stagedRevealCopy.console.lineCount.replace('{count}', String(eventCount))
+}
+
+function getAuditorConsoleMessage(result: BenchmarkResult) {
+  return isSafelyRejected(result)
+    ? stagedRevealCopy.console.auditorPassed
+    : result.audit.vetoReason ?? result.audit.recommendation
+}
+
+function getAuditorRevealDelay(result: BenchmarkResult) {
+  return (
+    stagedRevealTiming.verifierStart +
+    result.verification.comparisonRows.length * stagedRevealTiming.verifierRowInterval +
+    stagedRevealTiming.auditorPause
+  )
+}
+
+function getFinalRevealDelay(result: BenchmarkResult) {
+  return (
+    getAuditorRevealDelay(result) +
+    stagedRevealTiming.executorAfterAuditor +
+    stagedRevealTiming.mantleAfterExecutor +
+    stagedRevealTiming.finalAfterMantle
+  )
+}
+
+function isStageAtLeast(currentStage: RevealStage, targetStage: RevealStage) {
+  return revealStageOrder[currentStage] >= revealStageOrder[targetStage]
+}
+
+function getPipelineSteps(result: BenchmarkResult | undefined, revealStage: RevealStage) {
   const proposer = copy.pipeline.agents.proposer
   const auditor = copy.pipeline.agents.riskAuditor
   const executor = copy.pipeline.agents.executor
+  const didSafelyReject = isSafelyRejected(result)
 
   return [
     {
       role: proposer.title,
-      status: phase === 'idle' ? undefined : proposer.status,
+      status: isStageAtLeast(revealStage, 'proposal') ? proposer.status : undefined,
       description: proposer.role,
       permissionLabel: copy.pipeline.labels.permission,
       permission: proposer.permission,
-      reason: result && phase !== 'idle' ? result.proposal.plan : undefined,
+      reason: result && isStageAtLeast(revealStage, 'proposal') ? result.proposal.plan : undefined,
     },
     {
       role: auditor.title,
-      status: phase === 'vetoed' || phase === 'blocked' ? auditor.status : undefined,
+      status: isStageAtLeast(revealStage, 'auditor')
+        ? didSafelyReject
+          ? stagedRevealCopy.pipeline.auditorPassedStatus
+          : auditor.status
+        : undefined,
       description: auditor.role,
       permissionLabel: copy.pipeline.labels.permission,
       permission: auditor.permission,
       reason:
-        result && (phase === 'vetoed' || phase === 'blocked')
-          ? result.audit.vetoReason ?? result.audit.recommendation
+        result && isStageAtLeast(revealStage, 'auditor')
+          ? didSafelyReject
+            ? stagedRevealCopy.pipeline.auditorPassedReason
+            : result.audit.vetoReason ?? result.audit.recommendation
           : undefined,
     },
     {
       role: executor.title,
-      status: phase === 'blocked' ? executor.status : undefined,
+      status: isStageAtLeast(revealStage, 'executor') ? executor.status : undefined,
       description: executor.role,
       permissionLabel: copy.pipeline.labels.permission,
       permission: executor.permission,
-      reason: result && phase === 'blocked' ? result.execution.reason : undefined,
+      reason: result && isStageAtLeast(revealStage, 'executor') ? result.execution.reason : undefined,
     },
   ]
 }
@@ -653,25 +820,64 @@ function getVerdictDetails(result: BenchmarkResult) {
   ]
 }
 
-function getConsoleEvents(result: BenchmarkResult | undefined, phase: RunPhase) {
-  if (!result || phase === 'idle') {
+function getConsoleEvents(
+  result: BenchmarkResult | undefined,
+  revealStage: RevealStage,
+  visibleVerifierRows: number,
+) {
+  if (!result || revealStage === 'idle') {
     return []
   }
 
-  const events = [
-    `${copy.console.events.trapLoaded} ${result.scenario.title}`,
-    `${copy.console.events.agentProposal} ${result.proposal.plan}`,
+  const auditorDelay = getAuditorRevealDelay(result)
+  const executorDelay = auditorDelay + stagedRevealTiming.executorAfterAuditor
+  const mantleDelay = executorDelay + stagedRevealTiming.mantleAfterExecutor
+  const events: TimelineConsoleEvent[] = [
+    {
+      elapsedMs: stagedRevealTiming.trapLoaded,
+      message: `${copy.console.events.trapLoaded} ${result.scenario.title}`,
+    },
   ]
 
-  if (phase === 'vetoed' || phase === 'blocked') {
-    events.push(
-      `${copy.console.events.verifier} ${result.verification.detectedIssues[0] ?? result.verification.recommendation}`,
-      `${copy.console.events.riskAuditor} ${result.audit.vetoReason ?? result.audit.recommendation}`,
-    )
+  if (isStageAtLeast(revealStage, 'proposal')) {
+    events.push({
+      elapsedMs: stagedRevealTiming.proposal,
+      message: `${copy.console.events.agentProposal} ${result.proposal.plan}`,
+    })
   }
 
-  if (phase === 'blocked') {
-    events.push(`${copy.console.events.mantleLog} ${result.evidence.metadataURI}`)
+  if (visibleVerifierRows > 0) {
+    events.push({
+      elapsedMs:
+        stagedRevealTiming.verifierStart +
+        (visibleVerifierRows - 1) * stagedRevealTiming.verifierRowInterval,
+      message: `${copy.console.events.verifier} ${
+        isStageAtLeast(revealStage, 'auditor')
+          ? result.verification.detectedIssues[0] ?? result.verification.recommendation
+          : getVerifierProgressLabel(result, visibleVerifierRows)
+      }`,
+    })
+  }
+
+  if (isStageAtLeast(revealStage, 'auditor')) {
+    events.push({
+      elapsedMs: auditorDelay,
+      message: `${copy.console.events.riskAuditor} ${getAuditorConsoleMessage(result)}`,
+    })
+  }
+
+  if (isStageAtLeast(revealStage, 'executor')) {
+    events.push({
+      elapsedMs: executorDelay,
+      message: `${stagedRevealCopy.console.executor} ${result.execution.reason}`,
+    })
+  }
+
+  if (isStageAtLeast(revealStage, 'mantle')) {
+    events.push({
+      elapsedMs: mantleDelay,
+      message: `${copy.console.events.mantleLog} ${result.evidence.metadataURI}`,
+    })
   }
 
   return events
@@ -999,10 +1205,4 @@ function formatSignedNumber(value: number) {
 function getCopyLabel(copyValue: string) {
   const separatorIndex = copyValue.indexOf(':')
   return separatorIndex > -1 ? copyValue.slice(0, separatorIndex) : copyValue
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
 }

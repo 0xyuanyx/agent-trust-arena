@@ -24,6 +24,7 @@ type AgentSelectorProps = {
   selectedAgentId: string
   selectedAgentDetails: SelectedAgentDetails
   onSelectAgent: (agentId: string) => void
+  disabled?: boolean
 }
 
 export function AgentSelector({
@@ -32,6 +33,7 @@ export function AgentSelector({
   selectedAgentId,
   selectedAgentDetails,
   onSelectAgent,
+  disabled,
 }: AgentSelectorProps) {
   return (
     <section className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
@@ -42,11 +44,12 @@ export function AgentSelector({
 
           return (
             <button
-              className={`rounded-md border p-2.5 text-left transition ${
+              className={`rounded-md border p-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
                 isSelected
                   ? 'border-cyan-300/45 bg-cyan-300/10 shadow-lg shadow-cyan-950/20'
                   : 'border-white/10 bg-slate-950/35 hover:border-white/25 hover:bg-white/[0.05]'
               }`}
+              disabled={disabled}
               key={agent.id}
               onClick={() => onSelectAgent(agent.id)}
               type="button"

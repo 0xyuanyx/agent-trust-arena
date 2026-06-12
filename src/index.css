@@ -5,3 +5,55 @@ body {
   min-width: 320px;
   min-height: 100vh;
 }
+
+.arena-console-cursor {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.95rem;
+  border-radius: 1px;
+  background: rgb(103 232 249 / 0.85);
+  animation: arena-console-cursor-blink 0.9s steps(2, start) infinite;
+}
+
+.arena-verdict-stamp {
+  transform-origin: center;
+  animation: arena-verdict-stamp 260ms cubic-bezier(0.2, 0.9, 0.2, 1.1) both;
+}
+
+@keyframes arena-console-cursor-blink {
+  0%,
+  44% {
+    opacity: 1;
+  }
+
+  45%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes arena-verdict-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.22) rotate(-5deg);
+    filter: blur(1px);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(0.98) rotate(1deg);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-console-cursor,
+  .arena-verdict-stamp {
+    animation: none;
+  }
+}
