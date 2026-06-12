@@ -80,24 +80,6 @@ type PartialHumanReviewCopy = {
 const copy = appCopy
 const initialAgent = agents[0]
 const initialScenario = scenarios[0]
-const stagedRevealCopy = {
-  actions: {
-    running: '진행 중...',
-    rerun: '다시 실행',
-  },
-  console: {
-    lineCount: '{count} lines',
-    executor: '[Executor]',
-    auditorPassed: '통과: 함정을 식별했고 안전하게 거절했습니다.',
-  },
-  pipeline: {
-    auditorPassedStatus: '검증 통과',
-    auditorPassedReason: '함정 신호를 식별했고 안전 거절 경로로 통과했습니다.',
-  },
-  verifier: {
-    progress: '검증 {current}/{total}',
-  },
-} as const
 const stagedRevealTiming = {
   trapLoaded: 0,
   proposal: 520,
@@ -372,8 +354,8 @@ export function ArenaDashboard() {
         subtitle={copy.hero.subtitle}
         title={copy.hero.title}
       />
-      <div className="mx-auto grid max-w-[1680px] gap-4 px-6 py-5 xl:grid-cols-[320px_minmax(720px,1fr)_360px]">
-        <aside className="space-y-4">
+      <div className="mx-auto grid max-w-[1680px] gap-4 px-6 py-3 xl:grid-cols-[320px_minmax(720px,1fr)_360px]">
+        <aside className="space-y-3">
           <AgentSelector
             agents={agents.map(mapAgentOption)}
             disabled={isRunning}
@@ -385,6 +367,15 @@ export function ArenaDashboard() {
               name: selectedAgent.name,
             }}
             title={copy.agentProfile.title}
+          />
+          <AgentReadinessScore
+            formula={copy.score.formula}
+            metrics={getScoreMetrics(selectedAgent.scoreBreakdown)}
+            reason={finalBenchmarkResult?.score.reason}
+            scoreLabel={getScoreLabel(finalBenchmarkResult)}
+            scoreValue={getScoreValue(selectedAgent, finalBenchmarkResult)}
+            status={getScoreStatus(finalBenchmarkResult)}
+            title={copy.score.title}
           />
           <WalletGuardrails
             items={[
@@ -421,15 +412,6 @@ export function ArenaDashboard() {
             ]}
             title={copy.guardrails.title}
           />
-          <AgentReadinessScore
-            formula={copy.score.formula}
-            metrics={getScoreMetrics(selectedAgent.scoreBreakdown)}
-            reason={finalBenchmarkResult?.score.reason}
-            scoreLabel={getScoreLabel(finalBenchmarkResult)}
-            scoreValue={getScoreValue(selectedAgent, finalBenchmarkResult)}
-            status={getScoreStatus(finalBenchmarkResult)}
-            title={copy.score.title}
-          />
           <RecentTestHistory
             emptyState={copy.history.emptyState}
             items={selectedAgentHistory.map(mapHistoryItem)}
@@ -437,7 +419,7 @@ export function ArenaDashboard() {
           />
         </aside>
 
-        <section className="space-y-4">
+        <section className="space-y-3">
           <HoneypotTrapSelector
             description={copy.trap.description}
             disabled={isRunning}
@@ -452,6 +434,12 @@ export function ArenaDashboard() {
             steps={getPipelineSteps(benchmarkResult, revealStage)}
             subtitle={copy.pipeline.subtitle}
             title={copy.pipeline.title}
+          />
+          <VerdictCard
+            details={hasFinalResult && benchmarkResult ? getVerdictDetails(benchmarkResult) : []}
+            emptyState={copy.history.emptyState}
+            tone={isSafelyRejected(benchmarkResult) ? 'safe' : 'blocked'}
+            verdict={hasFinalResult && benchmarkResult ? getVerdictLabel(benchmarkResult) : undefined}
           />
           <IntentCalldataVerifier
             columns={{
@@ -477,15 +465,9 @@ export function ArenaDashboard() {
             signals={isStageAtLeast(revealStage, 'auditor') && benchmarkResult ? getRiskSignalItems(benchmarkResult) : []}
             title={copy.score.metrics.riskSignalDetection}
           />
-          <VerdictCard
-            details={hasFinalResult && benchmarkResult ? getVerdictDetails(benchmarkResult) : []}
-            emptyState={copy.history.emptyState}
-            tone={isSafelyRejected(benchmarkResult) ? 'safe' : 'blocked'}
-            verdict={hasFinalResult && benchmarkResult ? getVerdictLabel(benchmarkResult) : undefined}
-          />
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-3">
           <DecisionConsole
             emptyState={copy.history.emptyState}
             events={getConsoleEvents(benchmarkResult, revealStage, visibleVerifierRows)}
@@ -607,10 +589,10 @@ function mapScenarioToTrap(scenario: Scenario) {
 
 function getRunButtonLabel(isRunning: boolean, hasFinalResult: boolean) {
   if (isRunning) {
-    return stagedRevealCopy.actions.running
+    return copy.stagedReveal.actions.running
   }
 
-  return hasFinalResult ? stagedRevealCopy.actions.rerun : copy.trap.actions.runTrustTest
+  return hasFinalResult ? copy.stagedReveal.actions.rerun : copy.trap.actions.runTrustTest
 }
 
 function getVerifierProgressLabel(
@@ -621,18 +603,18 @@ function getVerifierProgressLabel(
     return undefined
   }
 
-  return stagedRevealCopy.verifier.progress
+  return copy.stagedReveal.verifier.progress
     .replace('{current}', String(visibleVerifierRows))
     .replace('{total}', String(result.verification.comparisonRows.length))
 }
 
 function getConsoleLineCountLabel(eventCount: number) {
-  return stagedRevealCopy.console.lineCount.replace('{count}', String(eventCount))
+  return copy.stagedReveal.console.lineCount.replace('{count}', String(eventCount))
 }
 
 function getAuditorConsoleMessage(result: BenchmarkResult) {
   return isSafelyRejected(result)
-    ? stagedRevealCopy.console.auditorPassed
+    ? copy.stagedReveal.console.auditorPassed
     : result.audit.vetoReason ?? result.audit.recommendation
 }
 
@@ -676,7 +658,7 @@ function getPipelineSteps(result: BenchmarkResult | undefined, revealStage: Reve
       role: auditor.title,
       status: isStageAtLeast(revealStage, 'auditor')
         ? didSafelyReject
-          ? stagedRevealCopy.pipeline.auditorPassedStatus
+          ? copy.stagedReveal.pipeline.auditorPassedStatus
           : auditor.status
         : undefined,
       description: auditor.role,
@@ -685,7 +667,7 @@ function getPipelineSteps(result: BenchmarkResult | undefined, revealStage: Reve
       reason:
         result && isStageAtLeast(revealStage, 'auditor')
           ? didSafelyReject
-            ? stagedRevealCopy.pipeline.auditorPassedReason
+            ? copy.stagedReveal.pipeline.auditorPassedReason
             : result.audit.vetoReason ?? result.audit.recommendation
           : undefined,
     },
@@ -869,7 +851,7 @@ function getConsoleEvents(
   if (isStageAtLeast(revealStage, 'executor')) {
     events.push({
       elapsedMs: executorDelay,
-      message: `${stagedRevealCopy.console.executor} ${result.execution.reason}`,
+      message: `${copy.stagedReveal.console.executor} ${result.execution.reason}`,
     })
   }
 
