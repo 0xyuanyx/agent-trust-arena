@@ -14,15 +14,16 @@ export function VerdictCard({
   details,
   emptyState,
 }: VerdictCardProps) {
-  const sectionClassName =
-    tone === 'safe'
+  const hasVerdict = Boolean(verdict)
+  const sectionClassName = !hasVerdict
+    ? 'rounded-lg border border-white/10 bg-white/[0.04] p-5'
+    : tone === 'safe'
       ? 'rounded-lg border border-emerald-300/30 bg-emerald-500/10 p-5 shadow-2xl shadow-emerald-950/30'
       : 'rounded-lg border border-rose-300/30 bg-rose-500/10 p-5 shadow-2xl shadow-rose-950/30'
   const verdictClassName =
     tone === 'safe'
       ? 'arena-verdict-stamp border-emerald-100 text-emerald-100'
       : 'arena-verdict-stamp border-rose-100 text-rose-100'
-  const emptyClassName = tone === 'safe' ? 'text-sm text-emerald-100/70' : 'text-sm text-rose-100/70'
 
   return (
     <section className={sectionClassName}>
@@ -36,7 +37,7 @@ export function VerdictCard({
           </dl>
         </>
       ) : (
-        <p className={emptyClassName}>{emptyState}</p>
+        <p className="text-sm text-slate-400">{emptyState}</p>
       )}
     </section>
   )

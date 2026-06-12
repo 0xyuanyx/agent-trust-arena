@@ -35,12 +35,12 @@ export function DecisionEvidencePanel({
           </span>
         ) : null}
       </div>
-      <dl className="mt-4 space-y-2">
+      <dl className="mt-4 divide-y divide-white/10">
         {facts.length > 0 ? (
           facts.map((fact) => (
-            <div className="grid grid-cols-[96px_1fr] gap-3" key={fact.label}>
+            <div className="grid grid-cols-[minmax(96px,0.8fr)_minmax(0,1fr)] gap-4 py-2.5 first:pt-0 last:pb-0" key={fact.label}>
               <dt className="text-xs text-slate-500">{fact.label}</dt>
-              <dd className="break-all font-mono text-xs text-slate-200">
+              <dd className="min-w-0 break-all text-right font-mono text-xs text-slate-200">
                 {fact.href ? (
                   <a
                     className="text-cyan-100 underline decoration-cyan-200/30 underline-offset-4 transition hover:text-cyan-50"

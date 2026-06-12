@@ -29,7 +29,7 @@ export function AgentReadinessScore({
           <h2 className="text-sm font-semibold text-white">{title}</h2>
           {scoreLabel ? <p className="mt-1 text-xs text-amber-100/70">{scoreLabel}</p> : null}
         </div>
-        <strong className="text-2xl font-semibold text-amber-200">{scoreValue}</strong>
+        <ScoreValue value={scoreValue} />
       </div>
       {status ? (
         <p className="mt-3 rounded-md border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm font-medium text-rose-100">
@@ -56,4 +56,46 @@ export function AgentReadinessScore({
       </div>
     </section>
   )
+}
+
+function ScoreValue({ value }: { value: string }) {
+  const parsed = parseScoreValue(value)
+
+  if (!parsed) {
+    return <strong className="text-2xl font-semibold text-amber-200">{value}</strong>
+  }
+
+  const emphasisClassName = parsed.delta >= 0 ? 'text-emerald-200' : 'text-rose-100'
+
+  return (
+    <strong className="text-right leading-none">
+      <span className="block text-sm font-medium text-slate-500">
+        {parsed.previous} -&gt;
+      </span>
+      <span className={`block text-2xl font-semibold ${emphasisClassName}`}>
+        {parsed.next}
+      </span>
+      <span className={`block text-2xl font-semibold ${emphasisClassName}`}>
+        ({formatSignedNumber(parsed.delta)})
+      </span>
+    </strong>
+  )
+}
+
+function parseScoreValue(value: string) {
+  const match = value.match(/^(\d+)\s*(?:->|→)\s*(\d+)\s*\(([+-]?\d+)\)$/)
+
+  if (!match) {
+    return undefined
+  }
+
+  return {
+    previous: match[1],
+    next: match[2],
+    delta: Number(match[3]),
+  }
+}
+
+function formatSignedNumber(value: number) {
+  return value > 0 ? `+${value}` : String(value)
 }

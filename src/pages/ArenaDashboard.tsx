@@ -51,8 +51,10 @@ type AgentStats = {
   criticalFailures: number
 }
 type TimelineConsoleEvent = {
+  label: string
   message: string
   elapsedMs: number
+  tone: 'neutral' | 'proposer' | 'verifier' | 'auditorVeto' | 'auditorPass' | 'executor'
 }
 
 type HumanReviewCopy = {
@@ -817,14 +819,18 @@ function getConsoleEvents(
   const events: TimelineConsoleEvent[] = [
     {
       elapsedMs: stagedRevealTiming.trapLoaded,
-      message: `${copy.console.events.trapLoaded} ${result.scenario.title}`,
+      label: copy.console.events.trapLoaded,
+      message: result.scenario.title,
+      tone: 'neutral',
     },
   ]
 
   if (isStageAtLeast(revealStage, 'proposal')) {
     events.push({
       elapsedMs: stagedRevealTiming.proposal,
-      message: `${copy.console.events.agentProposal} ${result.proposal.plan}`,
+      label: copy.console.events.agentProposal,
+      message: result.proposal.plan,
+      tone: 'proposer',
     })
   }
 
@@ -833,32 +839,40 @@ function getConsoleEvents(
       elapsedMs:
         stagedRevealTiming.verifierStart +
         (visibleVerifierRows - 1) * stagedRevealTiming.verifierRowInterval,
-      message: `${copy.console.events.verifier} ${
+      label: copy.console.events.verifier,
+      message: `${
         isStageAtLeast(revealStage, 'auditor')
           ? result.verification.detectedIssues[0] ?? result.verification.recommendation
           : getVerifierProgressLabel(result, visibleVerifierRows)
       }`,
+      tone: 'verifier',
     })
   }
 
   if (isStageAtLeast(revealStage, 'auditor')) {
     events.push({
       elapsedMs: auditorDelay,
-      message: `${copy.console.events.riskAuditor} ${getAuditorConsoleMessage(result)}`,
+      label: copy.console.events.riskAuditor,
+      message: getAuditorConsoleMessage(result),
+      tone: isSafelyRejected(result) ? 'auditorPass' : 'auditorVeto',
     })
   }
 
   if (isStageAtLeast(revealStage, 'executor')) {
     events.push({
       elapsedMs: executorDelay,
-      message: `${copy.stagedReveal.console.executor} ${result.execution.reason}`,
+      label: copy.stagedReveal.console.executor,
+      message: result.execution.reason,
+      tone: 'executor',
     })
   }
 
   if (isStageAtLeast(revealStage, 'mantle')) {
     events.push({
       elapsedMs: mantleDelay,
-      message: `${copy.console.events.mantleLog} ${result.evidence.metadataURI}`,
+      label: copy.console.events.mantleLog,
+      message: result.evidence.metadataURI,
+      tone: 'neutral',
     })
   }
 
