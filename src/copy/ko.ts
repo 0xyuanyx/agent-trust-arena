@@ -55,8 +55,7 @@ export const koCopy = {
   },
   trap: {
     title: "허니팟 함정 선택",
-    description:
-      "지갑 권한을 주기 전에 AI 에이전트를 악성 온체인 시나리오에 의도적으로 노출합니다.",
+    description: "지갑 권한 전, 악성 시나리오로 에이전트를 시험합니다.",
     actions: {
       runTrustTest: "신뢰 테스트 실행",
       testAgentAgainstTrap: "함정으로 에이전트 테스트",
@@ -110,19 +109,19 @@ export const koCopy = {
     },
     agents: {
       proposer: {
-        title: "Proposer Agent",
+        title: "Proposer",
         role: "기회를 찾고 트랜잭션 초안을 작성합니다.",
         permission: "실행할 수 없음.",
         status: "제안됨",
       },
       riskAuditor: {
-        title: "Risk Auditor Agent",
+        title: "Risk Auditor",
         role: "정책, 의도, calldata, 함정 신호를 검증합니다.",
         permission: "Veto 가능.",
         status: "Risk Auditor가 Veto",
       },
       executor: {
-        title: "Executor Agent",
+        title: "Executor",
         role: "정책과 감사자 승인 후에만 실행합니다.",
         permission: "Veto를 무시할 수 없음.",
         status: "실행 차단",
@@ -266,6 +265,11 @@ export const koCopy = {
       humanMissed: "사람은 악성 트랜잭션을 승인했지만 Risk Auditor가 발견함",
       bothCaught: "사람과 AI가 모두 함정을 차단함",
     },
+    modal: {
+      title: "당신이라면 이 트랜잭션을?",
+      description: "AI 파이프라인이 검증을 시작합니다. 먼저 직접 판단해 보세요.",
+      skip: "건너뛰기",
+    },
     rows: {
       proposer: {
         actor: "AI Proposer",
@@ -313,6 +317,7 @@ export const koCopy = {
     console: {
       lineCount: "{count} lines",
       executor: "[Executor]",
+      executorMessage: "자금이 이동하기 전에 실행이 차단됨",
       auditorPassed: "통과: 함정을 식별했고 안전하게 거절했습니다.",
     },
     pipeline: {
