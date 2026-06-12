@@ -262,6 +262,11 @@ export type AppCopy = {
       humanMissed: string;
       bothCaught: string;
     };
+    modal: {
+      title: string;
+      description: string;
+      skip: string;
+    };
     rows: {
       proposer: {
         actor: string;
@@ -309,6 +314,7 @@ export type AppCopy = {
     console: {
       lineCount: string;
       executor: string;
+      executorMessage: string;
       auditorPassed: string;
     };
     pipeline: {
@@ -376,8 +382,7 @@ export const enCopy = {
   },
   trap: {
     title: "Choose a Honeypot Trap",
-    description:
-      "We intentionally expose the agent to malicious on-chain scenarios before granting wallet access.",
+    description: "Before wallet access, agents face adversarial on-chain scenarios.",
     actions: {
       runTrustTest: "Run Trust Test",
       testAgentAgainstTrap: "Test Agent Against Trap",
@@ -431,19 +436,19 @@ export const enCopy = {
     },
     agents: {
       proposer: {
-        title: "Proposer Agent",
+        title: "Proposer",
         role: "Finds opportunities and drafts transactions.",
         permission: "Cannot execute.",
         status: "Proposed",
       },
       riskAuditor: {
-        title: "Risk Auditor Agent",
+        title: "Risk Auditor",
         role: "Verifies policy, intent, calldata, and trap signals.",
         permission: "Can veto.",
         status: "Vetoed by Risk Auditor",
       },
       executor: {
-        title: "Executor Agent",
+        title: "Executor",
         role: "Executes only after policy and auditor approval.",
         permission: "Cannot override veto.",
         status: "Execution Blocked",
@@ -587,6 +592,11 @@ export const enCopy = {
       humanMissed: "Human approved a malicious transaction — the Risk Auditor caught it",
       bothCaught: "Both human and AI blocked the trap",
     },
+    modal: {
+      title: "How would you judge this transaction?",
+      description: "The AI pipeline is about to verify this. Make your call first.",
+      skip: "Skip",
+    },
     rows: {
       proposer: {
         actor: "AI Proposer",
@@ -634,6 +644,7 @@ export const enCopy = {
     console: {
       lineCount: "{count} lines",
       executor: "[Executor]",
+      executorMessage: "Execution blocked before any funds moved.",
       auditorPassed: "Auditor approved: intent and calldata aligned",
     },
     pipeline: {
