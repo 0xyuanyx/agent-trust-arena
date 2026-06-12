@@ -20,8 +20,8 @@ export function VerdictCard({
       : 'rounded-lg border border-rose-300/30 bg-rose-500/10 p-5 shadow-2xl shadow-rose-950/30'
   const verdictClassName =
     tone === 'safe'
-      ? 'arena-verdict-stamp block text-5xl font-black tracking-normal text-emerald-100'
-      : 'arena-verdict-stamp block text-5xl font-black tracking-normal text-rose-100'
+      ? 'arena-verdict-stamp border-emerald-100 text-emerald-100'
+      : 'arena-verdict-stamp border-rose-100 text-rose-100'
   const emptyClassName = tone === 'safe' ? 'text-sm text-emerald-100/70' : 'text-sm text-rose-100/70'
 
   return (

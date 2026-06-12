@@ -16,8 +16,19 @@ body {
 }
 
 .arena-verdict-stamp {
+  display: inline-block;
+  padding: 5px 15px 3px;
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 4px;
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  transform: rotate(-2deg);
   transform-origin: center;
-  animation: arena-verdict-stamp 260ms cubic-bezier(0.2, 0.9, 0.2, 1.1) both;
+  animation: arena-verdict-stamp 360ms ease-out;
 }
 
 @keyframes arena-console-cursor-blink {
@@ -33,21 +44,9 @@ body {
 }
 
 @keyframes arena-verdict-stamp {
-  0% {
+  from {
     opacity: 0;
-    transform: scale(1.22) rotate(-5deg);
-    filter: blur(1px);
-  }
-
-  70% {
-    opacity: 1;
-    transform: scale(0.98) rotate(1deg);
-    filter: blur(0);
-  }
-
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
+    transform: rotate(-2deg) scale(1.5);
   }
 }
 
