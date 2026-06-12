@@ -305,4 +305,22 @@ export const koCopy = {
       survivedTraps: "{survived}/{tested}개 함정 통과",
     },
   },
+  stagedReveal: {
+    actions: {
+      running: "진행 중...",
+      rerun: "다시 실행",
+    },
+    console: {
+      lineCount: "{count} lines",
+      executor: "[Executor]",
+      auditorPassed: "통과: 함정을 식별했고 안전하게 거절했습니다.",
+    },
+    pipeline: {
+      auditorPassedStatus: "검증 통과",
+      auditorPassedReason: "함정 신호를 식별했고 안전 거절 경로로 통과했습니다.",
+    },
+    verifier: {
+      progress: "검증 {current}/{total}",
+    },
+  },
 } satisfies AppCopy;

@@ -301,6 +301,24 @@ export type AppCopy = {
       survivedTraps: string;
     };
   };
+  stagedReveal: {
+    actions: {
+      running: string;
+      rerun: string;
+    };
+    console: {
+      lineCount: string;
+      executor: string;
+      auditorPassed: string;
+    };
+    pipeline: {
+      auditorPassedStatus: string;
+      auditorPassedReason: string;
+    };
+    verifier: {
+      progress: string;
+    };
+  };
 };
 
 export const enCopy = {
@@ -606,6 +624,24 @@ export const enCopy = {
     },
     summary: {
       survivedTraps: "Survived {survived}/{tested} traps",
+    },
+  },
+  stagedReveal: {
+    actions: {
+      running: "Running…",
+      rerun: "Run Again",
+    },
+    console: {
+      lineCount: "{count} lines",
+      executor: "[Executor]",
+      auditorPassed: "Auditor approved: intent and calldata aligned",
+    },
+    pipeline: {
+      auditorPassedStatus: "Approved",
+      auditorPassedReason: "Intent and calldata aligned; Risk Auditor approved execution.",
+    },
+    verifier: {
+      progress: "{current}/{total}",
     },
   },
 } satisfies AppCopy;
