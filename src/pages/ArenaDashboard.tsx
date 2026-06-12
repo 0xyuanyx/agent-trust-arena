@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AgentExecutionPipeline } from '../components/AgentExecutionPipeline'
 import { AgentProfileCard } from '../components/AgentProfileCard'
+import { AgentReportCardModal } from '../components/AgentReportCardModal'
 import { AgentReadinessScore } from '../components/AgentReadinessScore'
 import { AgentSelector } from '../components/AgentSelector'
 import { DecisionConsole } from '../components/DecisionConsole'
@@ -37,6 +38,11 @@ import type { AgentProfile, BenchmarkResult, ComparisonRow, Scenario } from '../
 type RunPhase = 'idle' | 'proposed' | 'vetoed' | 'blocked'
 type RiskSignalTone = 'critical' | 'high' | 'medium' | 'low'
 type HumanReviewChoice = 'approve' | 'block' | 'needsReview'
+type AgentStats = {
+  testsCompleted: number
+  trapsSurvived: number
+  criticalFailures: number
+}
 
 type HumanReviewCopy = {
   prompt: string
@@ -58,6 +64,31 @@ type PartialHumanReviewCopy = {
   actions?: Partial<Record<HumanReviewChoice, string>>
   results?: Partial<HumanReviewCopy['results']>
   outcomes?: Partial<HumanReviewCopy['outcomes']>
+}
+
+type ReportCardCopy = {
+  title: string
+  actions: {
+    view: string
+    copySummary: string
+    copied: string
+    close: string
+  }
+  fields: {
+    readinessScore: string
+    trapsTested: string
+    trapsSurvived: string
+    criticalFailures: string
+    recentVerdict: string
+    lastDecision: string
+  }
+  values: {
+    localSimulation: string
+    verifiedOnMantleSepolia: string
+  }
+  summary: {
+    survivedTraps: string
+  }
 }
 
 const copy = appCopy
@@ -82,6 +113,30 @@ const humanReviewFallbackCopy = {
   },
 } satisfies HumanReviewCopy
 const humanReviewCopy = getHumanReviewCopy()
+const reportCardCopy = {
+  title: 'Agent Report Card',
+  actions: {
+    view: 'Report Card 보기',
+    copySummary: 'Copy Summary',
+    copied: 'Copied',
+    close: 'Close',
+  },
+  fields: {
+    readinessScore: 'Readiness Score',
+    trapsTested: 'Traps Tested',
+    trapsSurvived: 'Traps Survived',
+    criticalFailures: 'Critical Failures',
+    recentVerdict: 'Recent Verdict',
+    lastDecision: 'Last decision recorded on Mantle',
+  },
+  values: {
+    localSimulation: 'Local Simulation',
+    verifiedOnMantleSepolia: 'Verified on Mantle Sepolia',
+  },
+  summary: {
+    survivedTraps: 'Survived {survived}/{tested} traps',
+  },
+} satisfies ReportCardCopy
 const disconnectedWalletState: WalletState = {
   connected: false,
   isMantleSepolia: false,
@@ -98,6 +153,8 @@ export function ArenaDashboard() {
   const [walletError, setWalletError] = useState<string>()
   const [isConnectingWallet, setIsConnectingWallet] = useState(false)
   const [humanReviewChoice, setHumanReviewChoice] = useState<HumanReviewChoice>()
+  const [isReportCardOpen, setIsReportCardOpen] = useState(false)
+  const [isReportSummaryCopied, setIsReportSummaryCopied] = useState(false)
   const [history, setHistory] = useState<BenchmarkRunHistoryEntry[]>(() =>
     getRecentBenchmarkRuns(),
   )
@@ -149,6 +206,8 @@ export function ArenaDashboard() {
     setBenchmarkResult(result)
     setOnchainLogResult(undefined)
     setHumanReviewChoice(undefined)
+    setIsReportCardOpen(false)
+    setIsReportSummaryCopied(false)
     setHistory(nextHistory)
     setPhase('proposed')
 
@@ -170,6 +229,8 @@ export function ArenaDashboard() {
     setPhase('idle')
     setOnchainLogResult(undefined)
     setHumanReviewChoice(undefined)
+    setIsReportCardOpen(false)
+    setIsReportSummaryCopied(false)
   }
 
   function handleSelectScenario(scenarioId: string) {
@@ -182,6 +243,8 @@ export function ArenaDashboard() {
     setPhase('idle')
     setOnchainLogResult(undefined)
     setHumanReviewChoice(undefined)
+    setIsReportCardOpen(false)
+    setIsReportSummaryCopied(false)
   }
 
   async function handleConnectWallet() {
@@ -228,6 +291,25 @@ export function ArenaDashboard() {
     if (isHumanReviewChoice(actionId)) {
       setHumanReviewChoice(actionId)
     }
+  }
+
+  function handleOpenReportCard() {
+    setIsReportSummaryCopied(false)
+    setIsReportCardOpen(true)
+  }
+
+  function handleCloseReportCard() {
+    setIsReportCardOpen(false)
+  }
+
+  async function handleCopyReportSummary() {
+    if (!benchmarkResult) {
+      return
+    }
+
+    const summaryText = getReportSummaryText(benchmarkResult, profileStats, onchainLogResult)
+    await navigator.clipboard.writeText(summaryText)
+    setIsReportSummaryCopied(true)
   }
 
   return (
@@ -399,6 +481,15 @@ export function ArenaDashboard() {
             }
             title={copy.evidence.title}
           />
+          {hasFinalResult && benchmarkResult ? (
+            <button
+              className="w-full rounded-md border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-300/15"
+              onClick={handleOpenReportCard}
+              type="button"
+            >
+              {reportCardCopy.actions.view}
+            </button>
+          ) : null}
           <HumanVsAiBaseline
             actions={hasFinalResult ? getHumanReviewActions() : []}
             emptyState={copy.history.emptyState}
@@ -421,6 +512,28 @@ export function ArenaDashboard() {
           />
         </aside>
       </div>
+      {benchmarkResult ? (
+        <AgentReportCardModal
+          agentName={benchmarkResult.agent.name}
+          closeLabel={reportCardCopy.actions.close}
+          copiedLabel={reportCardCopy.actions.copied}
+          copySummaryLabel={reportCardCopy.actions.copySummary}
+          isCopied={isReportSummaryCopied}
+          lastDecision={getReportLastDecision(onchainLogResult)}
+          metrics={getReportCardMetrics(profileStats)}
+          onClose={handleCloseReportCard}
+          onCopySummary={handleCopyReportSummary}
+          open={isReportCardOpen && hasFinalResult}
+          recentVerdict={{
+            label: reportCardCopy.fields.recentVerdict,
+            value: getVerdictLabel(benchmarkResult),
+          }}
+          scoreLabel={reportCardCopy.fields.readinessScore}
+          scoreValue={`${benchmarkResult.score.nextScore}/100`}
+          summaryLine={getReportSummaryLine(profileStats)}
+          title={reportCardCopy.title}
+        />
+      ) : null}
     </main>
   )
 }
@@ -767,6 +880,48 @@ function getHumanFinalOutcome(result: BenchmarkResult, humanChoice: HumanReviewC
   return humanReviewCopy.outcomes.humanCaught
 }
 
+function getReportCardMetrics(stats: AgentStats) {
+  return [
+    { label: reportCardCopy.fields.trapsTested, value: String(stats.testsCompleted) },
+    { label: reportCardCopy.fields.trapsSurvived, value: String(stats.trapsSurvived) },
+    { label: reportCardCopy.fields.criticalFailures, value: String(stats.criticalFailures) },
+  ]
+}
+
+function getReportLastDecision(logResult: OnchainLogResult | undefined) {
+  if (logResult?.mode === 'onchain' && logResult.txHash) {
+    return {
+      label: reportCardCopy.fields.lastDecision,
+      value: formatAddress(logResult.txHash),
+      href: logResult.explorerUrl,
+    }
+  }
+
+  return {
+    label: reportCardCopy.fields.lastDecision,
+    value: reportCardCopy.values.localSimulation,
+  }
+}
+
+function getReportSummaryText(
+  result: BenchmarkResult,
+  stats: AgentStats,
+  logResult: OnchainLogResult | undefined,
+) {
+  const verification =
+    logResult?.mode === 'onchain' && logResult.explorerUrl
+      ? `${reportCardCopy.values.verifiedOnMantleSepolia} ${logResult.explorerUrl}`
+      : reportCardCopy.values.localSimulation
+
+  return `${result.agent.name} — Readiness ${result.score.nextScore}/100 — ${getReportSummaryLine(stats)} — ${verification}`
+}
+
+function getReportSummaryLine(stats: AgentStats) {
+  return reportCardCopy.summary.survivedTraps
+    .replace('{survived}', String(stats.trapsSurvived))
+    .replace('{tested}', String(stats.testsCompleted))
+}
+
 function mapHistoryItem(entry: BenchmarkRunHistoryEntry) {
   return {
     label: `${entry.scenarioId} ${entry.scenarioTitle}`,
@@ -775,7 +930,7 @@ function mapHistoryItem(entry: BenchmarkRunHistoryEntry) {
   }
 }
 
-function getProfileStats(agent: AgentProfile, history: BenchmarkRunHistoryEntry[]) {
+function getProfileStats(agent: AgentProfile, history: BenchmarkRunHistoryEntry[]): AgentStats {
   const latest = history[0]
 
   return {
